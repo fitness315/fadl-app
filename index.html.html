@@ -1,0 +1,793 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>#FADL — Your Personal Plan</title>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#080808;color:#fff;font-family:'Helvetica Neue',Arial,sans-serif;min-height:100vh}
+input:focus,select:focus,textarea:focus{outline:none;border-color:#F0FF00!important}
+button{transition:opacity 0.15s,transform 0.15s;cursor:pointer}
+button:active{opacity:0.85;transform:scale(0.98)}
+::-webkit-scrollbar{width:5px}
+::-webkit-scrollbar-thumb{background:#333;border-radius:3px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.spin{animation:spin 1s linear infinite;display:inline-block}
+@keyframes fadeIn{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+.fadeIn{animation:fadeIn 0.35s ease both}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect } = React;
+
+// ── CONFIG ────────────────────────────────────────────────────
+const SUPA_URL  = "https://nrtovlmelrwvezwhkdoh.supabase.co";
+const SUPA_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5ydG92bG1lbHJ3dmV6d2hrZG9oIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgzNDU5NzEsImV4cCI6MjA5MzkyMTk3MX0.NpqNxYAdNZbI0L4EhluXnyAmUjlP5YECUZaK-2MQGvQ";
+const STRIPE    = "https://buy.stripe.com/test_28E8wP4659Ud7ydbhQ4F201";
+const AC="#F0FF00", MU="#666", CA="#111", B2="#2a2a2a", BO="#1e1e1e";
+
+// ── SUPABASE ──────────────────────────────────────────────────
+const H=(tok)=>({"apikey":SUPA_ANON,"Authorization":`Bearer ${tok||SUPA_ANON}`,"Content-Type":"application/json"});
+const supa={
+  async signUp(e,p,n){const r=await fetch(`${SUPA_URL}/auth/v1/signup`,{method:"POST",headers:H(),body:JSON.stringify({email:e,password:p,data:{name:n}})});return r.json();},
+  async signIn(e,p){const r=await fetch(`${SUPA_URL}/auth/v1/token?grant_type=password`,{method:"POST",headers:H(),body:JSON.stringify({email:e,password:p})});return r.json();},
+  async signOut(tok){await fetch(`${SUPA_URL}/auth/v1/logout`,{method:"POST",headers:H(tok)});},
+  async getUser(tok){const r=await fetch(`${SUPA_URL}/auth/v1/user`,{headers:H(tok)});return r.json();},
+  async getPaid(uid,tok){try{const r=await fetch(`${SUPA_URL}/rest/v1/purchases?user_id=eq.${uid}&select=*`,{headers:H(tok)});const d=await r.json();return Array.isArray(d)&&d.length>0;}catch{return false;}},
+  async setPaid(uid,tok){await fetch(`${SUPA_URL}/rest/v1/purchases`,{method:"POST",headers:{...H(tok),"Prefer":"return=minimal"},body:JSON.stringify({user_id:uid,product:"12_week_plan",purchased_at:new Date().toISOString()})});},
+  async savePlan(uid,tok,plan){try{await fetch(`${SUPA_URL}/rest/v1/user_plans`,{method:"POST",headers:{...H(tok),"Prefer":"resolution=merge-duplicates,return=minimal"},body:JSON.stringify({user_id:uid,plan_data:JSON.stringify(plan),created_at:new Date().toISOString()})});}catch(e){console.log("save plan err",e);}},
+  async getPlan(uid,tok){try{const r=await fetch(`${SUPA_URL}/rest/v1/user_plans?user_id=eq.${uid}&select=*&limit=1`,{headers:H(tok)});const d=await r.json();return Array.isArray(d)&&d.length>0?JSON.parse(d[0].plan_data):null;}catch{return null;}},
+};
+
+// ── PLAN GENERATOR ────────────────────────────────────────────
+const EX = {
+  // Chest
+  benchPress:{name:"Barbell Bench Press",focus:"chest",needs:"Barbell and plates",reps:{b:"8–10",i:"6–8",a:"4–6"},rest:"90s",tip:"Bar to mid-chest. Full range every rep."},
+  dbPress:{name:"Dumbbell Press",focus:"chest",needs:"Dumbbells",reps:{b:"10–12",i:"8–10",a:"6–8"},rest:"75s",tip:"Full range. Controlled descent."},
+  inclineDb:{name:"Incline DB Press",focus:"chest",needs:"Dumbbells",reps:{b:"10–12",i:"8–10",a:"6–8"},rest:"75s",tip:"15–30° only. Not 45°."},
+  cableFly:{name:"Cable Fly",focus:"chest",needs:"Cable machines",reps:{b:"12–15",i:"12–15",a:"10–12"},rest:"60s",tip:"Squeeze hard at the top."},
+  pushUp:{name:"Push Up",focus:"chest",needs:null,reps:{b:"12–15",i:"15–20",a:"20–25"},rest:"60s",tip:"Chest to floor every rep."},
+  pikePush:{name:"Pike Press",focus:"shoulders",needs:null,reps:{b:"10–12",i:"12–15",a:"15–20"},rest:"60s",tip:"Hips high, head towards floor."},
+  // Back
+  deadlift:{name:"Deadlift",focus:"back",needs:"Barbell and plates",reps:{b:"5–6",i:"4–6",a:"3–5"},rest:"120s",tip:"Hip hinge. Bar stays close to body."},
+  bbRow:{name:"Barbell Row",focus:"back",needs:"Barbell and plates",reps:{b:"10–12",i:"8–10",a:"6–8"},rest:"90s",tip:"Pull to lower chest. Stay tight."},
+  dbRow:{name:"Dumbbell Row",focus:"back",needs:"Dumbbells",reps:{b:"10–12",i:"10–12",a:"8–10"},rest:"75s",tip:"Full stretch at the bottom."},
+  latPulldown:{name:"Lat Pulldown",focus:"back",needs:"Cable machines",reps:{b:"12–15",i:"10–12",a:"8–10"},rest:"75s",tip:"Elbows to hips. Chest tall."},
+  cableRow:{name:"Seated Cable Row",focus:"back",needs:"Cable machines",reps:{b:"12–15",i:"10–12",a:"8–10"},rest:"75s",tip:"Full stretch. Retract at the end."},
+  pullUp:{name:"Pull Up",focus:"back",needs:"Pull up bar",reps:{b:"5–8",i:"8–10",a:"10–15"},rest:"90s",tip:"Full hang to chin over bar."},
+  invertedRow:{name:"Inverted Row",focus:"back",needs:null,reps:{b:"10–12",i:"12–15",a:"15–20"},rest:"60s",tip:"Straight body. Pull chest to bar."},
+  // Shoulders
+  ohp:{name:"Overhead Press",focus:"shoulders",needs:"Barbell and plates",reps:{b:"10–12",i:"8–10",a:"6–8"},rest:"90s",tip:"Brace core. Rib cage down."},
+  dbOhp:{name:"DB Shoulder Press",focus:"shoulders",needs:"Dumbbells",reps:{b:"12–15",i:"10–12",a:"8–10"},rest:"75s",tip:"Controlled. No arching."},
+  latRaise:{name:"Lateral Raise",focus:"shoulders",needs:"Dumbbells",reps:{b:"15–20",i:"12–15",a:"12–15"},rest:"60s",tip:"Lead with elbows not wrists."},
+  cableLat:{name:"Cable Lateral Raise",focus:"shoulders",needs:"Cable machines",reps:{b:"15–20",i:"12–15",a:"12–15"},rest:"60s",tip:"Constant tension beats heavy weight."},
+  facePull:{name:"Face Pulls",focus:"shoulders",needs:"Cable machines",reps:{b:"15–20",i:"15–20",a:"20–25"},rest:"45s",tip:"Light weight. External rotation at end."},
+  // Triceps
+  triPushdown:{name:"Tricep Pushdown",focus:"triceps",needs:"Cable machines",reps:{b:"15–20",i:"12–15",a:"10–12"},rest:"60s",tip:"Full extension every rep."},
+  skullCrush:{name:"Skull Crushers",focus:"triceps",needs:"Barbell and plates",reps:{b:"12–15",i:"10–12",a:"8–10"},rest:"60s",tip:"Keep elbows in. Lower to forehead."},
+  dip:{name:"Tricep Dip",focus:"triceps",needs:null,reps:{b:"10–12",i:"12–15",a:"15–20"},rest:"60s",tip:"Lean forward slightly. Full range."},
+  // Biceps
+  bbCurl:{name:"Barbell Curl",focus:"biceps",needs:"Barbell and plates",reps:{b:"12–15",i:"10–12",a:"8–10"},rest:"60s",tip:"No swinging. Controlled tempo."},
+  dbCurl:{name:"Dumbbell Curl",focus:"biceps",needs:"Dumbbells",reps:{b:"12–15",i:"10–12",a:"8–10"},rest:"60s",tip:"Supinate at the top."},
+  hammerCurl:{name:"Hammer Curl",focus:"biceps",needs:"Dumbbells",reps:{b:"12–15",i:"10–12",a:"8–10"},rest:"60s",tip:"Neutral grip throughout."},
+  // Legs
+  squat:{name:"Barbell Squat",focus:"legs",needs:"Barbell and plates",reps:{b:"8–10",i:"6–8",a:"4–6"},rest:"120s",tip:"Depth below parallel. Drive through heels."},
+  dbSquat:{name:"Dumbbell Squat",focus:"legs",needs:"Dumbbells",reps:{b:"12–15",i:"10–12",a:"10–12"},rest:"90s",tip:"Goblet hold. Keep chest tall."},
+  bwSquat:{name:"Bodyweight Squat",focus:"legs",needs:null,reps:{b:"15–20",i:"20–25",a:"25–30"},rest:"60s",tip:"Slow descent. Full range."},
+  rdl:{name:"Romanian Deadlift",focus:"legs",needs:"Barbell and plates",reps:{b:"10–12",i:"8–10",a:"6–8"},rest:"90s",tip:"3 second descent. Feel the stretch."},
+  dbRdl:{name:"DB Romanian Deadlift",focus:"legs",needs:"Dumbbells",reps:{b:"12–15",i:"10–12",a:"10–12"},rest:"75s",tip:"Hip hinge. Feel hamstring stretch."},
+  legPress:{name:"Leg Press",focus:"legs",needs:"Smith machine",reps:{b:"12–15",i:"10–12",a:"8–10"},rest:"90s",tip:"Full range. Knees tracking out."},
+  legCurl:{name:"Leg Curl",focus:"legs",needs:"Cable machines",reps:{b:"12–15",i:"12–15",a:"10–12"},rest:"60s",tip:"Slow and controlled on the way up."},
+  lunge:{name:"Reverse Lunge",focus:"legs",needs:null,reps:{b:"10–12 each",i:"12–15 each",a:"15–20 each"},rest:"75s",tip:"Knee off the floor. Controlled."},
+  splitSquat:{name:"Bulgarian Split Squat",focus:"legs",needs:"Dumbbells",reps:{b:"8–10 each",i:"8–10 each",a:"10–12 each"},rest:"90s",tip:"Rear foot elevated. Drive through front heel."},
+  calfRaise:{name:"Calf Raise",focus:"calves",needs:null,reps:{b:"15–20",i:"20–25",a:"20–25"},rest:"45s",tip:"Full stretch at the bottom always."},
+  // Core
+  plank:{name:"Plank Hold",focus:"core",needs:null,reps:{b:"30–45s",i:"45–60s",a:"60s+"},rest:"45s",tip:"Squeeze everything. Breathe steadily."},
+  cableCrunch:{name:"Cable Crunch",focus:"core",needs:"Cable machines",reps:{b:"15–20",i:"12–15",a:"12–15"},rest:"45s",tip:"Exhale hard at the bottom."},
+  legRaise:{name:"Hanging Leg Raise",focus:"core",needs:"Pull up bar",reps:{b:"10–12",i:"12–15",a:"15–20"},rest:"45s",tip:"Control the descent. No swinging."},
+  abWheel:{name:"Ab Wheel Rollout",focus:"core",needs:null,reps:{b:"8–10",i:"10–12",a:"12–15"},rest:"45s",tip:"Keep hips low. Don't collapse."},
+  mountainClimber:{name:"Mountain Climbers",focus:"core",needs:null,reps:{b:"30s",i:"45s",a:"60s"},rest:"45s",tip:"Hips level. Drive knees to chest."},
+  // Wheelchair / Seated exercises
+  seatedDbPress:{name:"Seated DB Press",focus:"chest",needs:"Dumbbells",wheelchair:true,reps:{b:"10–12",i:"8–10",a:"6–8"},rest:"75s",tip:"Press straight up from chest height. Control the descent."},
+  seatedChestFly:{name:"Seated DB Fly",focus:"chest",needs:"Dumbbells",wheelchair:true,reps:{b:"12–15",i:"10–12",a:"10–12"},rest:"60s",tip:"Slight bend in elbows. Squeeze chest at the top."},
+  seatedRow:{name:"Seated Cable Row",focus:"back",needs:"Cable machines",wheelchair:true,reps:{b:"12–15",i:"10–12",a:"8–10"},rest:"75s",tip:"Pull to your stomach. Full stretch forward each rep."},
+  seatedLatPull:{name:"Lat Pulldown",focus:"back",needs:"Cable machines",wheelchair:true,reps:{b:"12–15",i:"10–12",a:"8–10"},rest:"75s",tip:"Pull elbows down and back. Think chest to bar."},
+  seatedBandRow:{name:"Resistance Band Row",focus:"back",needs:"Resistance bands",wheelchair:true,reps:{b:"15–20",i:"12–15",a:"10–12"},rest:"60s",tip:"Anchor band in front. Pull both handles to your sides."},
+  seatedOhp:{name:"Seated DB Shoulder Press",focus:"shoulders",needs:"Dumbbells",wheelchair:true,reps:{b:"12–15",i:"10–12",a:"8–10"},rest:"75s",tip:"Press directly overhead. Control on the way down."},
+  seatedLatRaise:{name:"Seated Lateral Raise",focus:"shoulders",needs:"Dumbbells",wheelchair:true,reps:{b:"15–20",i:"12–15",a:"12–15"},rest:"60s",tip:"Raise to shoulder height only. Lead with elbows."},
+  seatedFrontRaise:{name:"Seated Front Raise",focus:"shoulders",needs:"Dumbbells",wheelchair:true,reps:{b:"15–20",i:"12–15",a:"12–15"},rest:"60s",tip:"Alternate arms. Keep slight bend in elbow."},
+  seatedFacePull:{name:"Band Face Pull",focus:"shoulders",needs:"Resistance bands",wheelchair:true,reps:{b:"15–20",i:"15–20",a:"20–25"},rest:"45s",tip:"Pull to face level. Hands apart at the end. Protects shoulders."},
+  seatedTricepExt:{name:"Seated Overhead Tricep Ext.",focus:"triceps",needs:"Dumbbells",wheelchair:true,reps:{b:"12–15",i:"10–12",a:"10–12"},rest:"60s",tip:"Keep elbows close to head. Full extension at top."},
+  seatedTricepPush:{name:"Seated Tricep Pushdown",focus:"triceps",needs:"Resistance bands",wheelchair:true,reps:{b:"15–20",i:"12–15",a:"10–12"},rest:"60s",tip:"Anchor band above. Push straight down. Full extension."},
+  seatedCurl:{name:"Seated DB Curl",focus:"biceps",needs:"Dumbbells",wheelchair:true,reps:{b:"12–15",i:"10–12",a:"8–10"},rest:"60s",tip:"Supinate at the top. No swinging."},
+  seatedHammer:{name:"Seated Hammer Curl",focus:"biceps",needs:"Dumbbells",wheelchair:true,reps:{b:"12–15",i:"10–12",a:"8–10"},rest:"60s",tip:"Neutral grip. Control the descent."},
+  seatedBandCurl:{name:"Band Bicep Curl",focus:"biceps",needs:"Resistance bands",wheelchair:true,reps:{b:"15–20",i:"12–15",a:"12–15"},rest:"60s",tip:"Anchor band under wheel. Curl both handles up."},
+  seatedAbCrunch:{name:"Seated Ab Crunch",focus:"core",needs:null,wheelchair:true,reps:{b:"15–20",i:"20–25",a:"25–30"},rest:"45s",tip:"Lean forward from hips. Brace core. Return slowly."},
+  seatedRotation:{name:"Seated Trunk Rotation",focus:"core",needs:"Dumbbells",wheelchair:true,reps:{b:"12–15 each",i:"15–20 each",a:"20–25 each"},rest:"45s",tip:"Rotate from the waist. Keep hips still throughout."},
+  seatedBandPull:{name:"Seated Band Pull Apart",focus:"back",needs:"Resistance bands",wheelchair:true,reps:{b:"15–20",i:"15–20",a:"20–25"},rest:"45s",tip:"Hold band at chest height. Pull apart until arms are wide. Great for posture."},
+  seatedPushUp:{name:"Wheelchair Push Up",focus:"chest",needs:null,wheelchair:true,reps:{b:"5–8",i:"8–12",a:"12–15"},rest:"60s",tip:"Hands on armrests. Press body up. Only if safe and able to do so."},
+  seatedChestPress:{name:"Band Chest Press",focus:"chest",needs:"Resistance bands",wheelchair:true,reps:{b:"12–15",i:"10–12",a:"10–12"},rest:"60s",tip:"Anchor band behind you at chest height. Press forward and together."},
+};
+
+function hasEquip(profile,eq){return profile.equipment.includes(eq);}
+function hasAny(profile,arr){return arr.some(e=>profile.equipment.includes(e));}
+function pick(profile,options){return options.find(e=>!e.needs||hasEquip(profile,e.needs))||options[options.length-1];}
+
+function getReps(ex,exp){return ex.reps[exp==="Beginner — less than 1 year"?"b":exp==="Intermediate — 1 to 3 years"?"i":"a"];}
+
+function buildExercise(ex,profile){return {name:ex.name,reps:getReps(ex,profile.experience),rest:ex.rest,tip:ex.tip};}
+
+function selectExercises(profile,focus,count=6){
+  const all=Object.values(EX);
+  const pool=all.filter(e=>{
+    if(e.focus!==focus&&!["chest","back","shoulders","triceps","biceps","legs","calves","core"].every(f=>f!==focus||e.focus===focus))return false;
+    if(!e.needs)return true;
+    return hasEquip(profile,e.needs);
+  });
+  const byFocus=all.filter(e=>e.focus===focus&&(!e.needs||hasEquip(profile,e.needs)));
+  return byFocus.slice(0,count).map(e=>buildExercise(e,profile));
+}
+
+function generatePlan(profile){
+  const days=parseInt(profile.days)||4;
+  const goal=profile.goal;
+  const exp=profile.experience;
+  const isWheelchair=profile.mobility==="Wheelchair user";
+  const isLimitedLower=profile.mobility==="Limited lower body"||isWheelchair;
+  const isLimitedUpper=profile.mobility==="Limited upper body";
+
+  // Sets per phase based on experience
+  const phaseConf=[
+    {phase:"PHASE 01",title:"Foundation",weeks:"Weeks 1–4",sets:exp.includes("Beginner")?3:4,rpe:"6–7/10",desc:`Building the foundation for your ${goal.toLowerCase()} journey.${isWheelchair?" Every exercise is adapted for seated training — full upper body development is absolutely achievable.":" Master the movements before adding intensity."}`},
+    {phase:"PHASE 02",title:"Build",weeks:"Weeks 5–8",sets:4,rpe:"7–8/10",desc:`Increasing volume to drive ${goal==="Build muscle"?"muscle growth":"fat loss and muscle retention"}. Push harder each week.`},
+    {phase:"PHASE 03",title:"Peak",weeks:"Weeks 9–12",sets:exp.includes("Advanced")?5:4,rpe:"8–9/10",desc:`Maximum intensity. Push close to failure on final sets. This is where your physique truly changes.`},
+  ];
+
+  // Wheelchair specific day templates — upper body only, all seated
+  const wheelchairTemplates3=[
+    {label:"DAY A",focus:"Chest · Shoulders · Triceps",groups:["chest","shoulders","triceps"],wheelchair:true},
+    {label:"DAY B",focus:"Back · Biceps",groups:["back","biceps"],wheelchair:true},
+    {label:"DAY C",focus:"Full Upper Body · Core",groups:["chest","back","shoulders","core"],wheelchair:true},
+  ];
+  const wheelchairTemplates4=[
+    {label:"DAY A",focus:"Chest · Triceps",groups:["chest","triceps"],wheelchair:true},
+    {label:"DAY B",focus:"Back · Biceps",groups:["back","biceps"],wheelchair:true},
+    {label:"DAY C",focus:"Shoulders · Core",groups:["shoulders","core"],wheelchair:true},
+    {label:"DAY D",focus:"Full Upper Body",groups:["chest","back","shoulders"],wheelchair:true},
+  ];
+  const wheelchairTemplates5=[
+    {label:"DAY A",focus:"Chest · Triceps",groups:["chest","triceps"],wheelchair:true},
+    {label:"DAY B",focus:"Back · Biceps",groups:["back","biceps"],wheelchair:true},
+    {label:"DAY C",focus:"Shoulders",groups:["shoulders"],wheelchair:true},
+    {label:"DAY D",focus:"Full Upper Push",groups:["chest","shoulders","triceps"],wheelchair:true},
+    {label:"DAY E",focus:"Full Upper Pull · Core",groups:["back","biceps","core"],wheelchair:true},
+  ];
+
+  // Standard day templates
+  const dayTemplates3=[
+    {label:"DAY A",focus:"Full Body — Upper",groups:["chest","back","shoulders"]},
+    {label:"DAY B",focus:"Full Body — Lower",groups:isLimitedLower?["chest","back","core"]:["legs","calves","core"]},
+    {label:"DAY C",focus:"Full Body — Push/Pull",groups:["chest","back","biceps","triceps"]},
+  ];
+  const dayTemplates4=[
+    {label:"DAY A",focus:"Chest · Shoulders · Triceps",groups:["chest","shoulders","triceps"]},
+    {label:"DAY B",focus:"Back · Biceps",groups:["back","biceps"]},
+    {label:"DAY C",focus:isLimitedLower?"Arms · Core":"Legs · Calves · Core",groups:isLimitedLower?["biceps","triceps","core"]:["legs","calves","core"]},
+    {label:"DAY D",focus:"Full Body · Weak Points",groups:["chest","back","shoulders"]},
+  ];
+  const dayTemplates5=[
+    {label:"DAY A",focus:"Chest · Triceps",groups:["chest","triceps"]},
+    {label:"DAY B",focus:"Back · Biceps",groups:["back","biceps"]},
+    {label:"DAY C",focus:isLimitedLower?"Shoulders · Core":"Legs · Calves",groups:isLimitedLower?["shoulders","core"]:["legs","calves"]},
+    {label:"DAY D",focus:"Shoulders · Core",groups:["shoulders","core"]},
+    {label:"DAY E",focus:"Full Body",groups:["chest","back","legs"]},
+  ];
+
+  const templates=isWheelchair
+    ?(days===3?wheelchairTemplates3:days===5?wheelchairTemplates5:wheelchairTemplates4)
+    :(days===3?dayTemplates3:days===5?dayTemplates5:dayTemplates4);
+
+  const buildDays=()=>templates.map(tmpl=>{
+    const exercises=[];
+    tmpl.groups.forEach(group=>{
+      const allEx=Object.values(EX).filter(e=>{
+        if(e.focus!==group)return false;
+        if(isWheelchair&&!e.wheelchair)return false;
+        if(!e.needs)return true;
+        return hasEquip(profile,e.needs);
+      });
+      // Fall back to non-wheelchair if no wheelchair exercises found for that group
+      const fallback=Object.values(EX).filter(e=>e.focus===group&&(!e.needs||hasEquip(profile,e.needs)));
+      const pool=allEx.length>0?allEx:fallback;
+      const take=tmpl.groups.length===1?6:tmpl.groups.length===2?3:2;
+      pool.slice(0,take).forEach(e=>exercises.push(buildExercise(e,profile)));
+    });
+    return {label:tmpl.label,focus:tmpl.focus,exercises:exercises.slice(0,6)};
+  });
+
+  // Nutrition targets
+  const isLose=goal.includes("Lose")||goal.includes("fat");
+  const isBuild=goal.includes("Build")||goal.includes("muscle");
+  const nutrition={
+    calories:isLose?"TDEE minus 300–500 calories":isBuild?"TDEE plus 200–300 calories":"Eat at your TDEE (maintenance)",
+    protein:`${isLose?"1.2g":"1g"} per lb of bodyweight daily`,
+    tips:[
+      isLose?"Track your calories for at least 2 weeks — awareness is everything":"Eat in a small surplus. Not a big one.",
+      isBuild?"Don't skip meals — consistency builds muscle":"Protein fills you up and protects muscle.",
+      "Drink 3–4 litres of water every day",
+      "Sleep 7–9 hours — this is non-negotiable for results",
+      isWheelchair?"Upper body training burns significant calories — don't underestimate it":"Meal prep on Sunday to make the whole week easier",
+    ],
+  };
+
+  const mobilityNote=isWheelchair?" Every exercise has been selected and adapted for seated training."
+    :isLimitedLower?" Lower body exercises have been replaced with upper body alternatives."
+    :isLimitedUpper?" We've focused the plan on what you can do comfortably."
+    :profile.injuries&&profile.injuries!=="None"?` We've worked around your ${profile.injuries.toLowerCase()}.`:"";
+
+  const summary=`This plan is built specifically for your goal to ${goal.toLowerCase()}. You'll train ${days} days per week using ${profile.equipment.length>0?profile.equipment.slice(0,2).join(" and ").toLowerCase():"bodyweight"}, progressing through 3 phases that get more intense as you go.${mobilityNote}`;
+
+  return {
+    summary,
+    phases:phaseConf.map(ph=>({...ph,days:buildDays()})),
+    nutrition,
+    isWheelchair,
+  };
+}
+
+// ── UI COMPONENTS ─────────────────────────────────────────────
+function Logo(){return <div style={{fontFamily:"Arial Black,Arial",fontSize:22,fontWeight:900,letterSpacing:"0.04em"}}><span style={{color:AC}}>#</span><span>FADL</span></div>;}
+
+function Btn({children,onClick,disabled,ghost=false}){
+  return <button onClick={onClick} disabled={disabled} style={{width:"100%",padding:"16px",background:disabled?"#333":ghost?"transparent":AC,color:disabled?"#666":ghost?"#fff":"#080808",fontSize:16,fontWeight:900,letterSpacing:"0.1em",textTransform:"uppercase",border:ghost?`1px solid ${B2}`:"none",borderRadius:4,cursor:disabled?"not-allowed":"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+    {disabled&&<div style={{width:18,height:18,border:"2px solid #555",borderTopColor:AC,borderRadius:"50%"}} className="spin"/>}
+    {children}
+  </button>;
+}
+
+function FInput({label,type="text",value,onChange,placeholder,error}){
+  const [f,setF]=useState(false);
+  return <div style={{marginBottom:16}}>
+    {label&&<label style={{fontSize:11,fontWeight:700,color:MU,letterSpacing:"0.15em",textTransform:"uppercase",display:"block",marginBottom:8}}>{label}</label>}
+    <input type={type} value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder}
+      onFocus={()=>setF(true)} onBlur={()=>setF(false)}
+      style={{width:"100%",padding:"14px 16px",background:"#161616",color:"#fff",border:`1px solid ${error?"#ff4444":f?AC:B2}`,borderRadius:4,fontSize:15,fontFamily:"inherit",boxSizing:"border-box"}}/>
+    {error&&<div style={{fontSize:12,color:"#ff4444",marginTop:6}}>{error}</div>}
+  </div>;
+}
+
+// ── LANDING ───────────────────────────────────────────────────
+function Landing({onSignup,onLogin}){
+  return <div style={{minHeight:"100vh",display:"flex",flexDirection:"column"}}>
+    <nav style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"18px 24px",borderBottom:`1px solid ${BO}`,position:"sticky",top:0,background:"rgba(8,8,8,0.97)",backdropFilter:"blur(12px)",zIndex:100}}>
+      <Logo/>
+      <div style={{display:"flex",gap:10}}>
+        <button onClick={onLogin} style={{padding:"10px 20px",background:"transparent",color:"#fff",border:`1px solid ${B2}`,borderRadius:4,fontSize:13,fontWeight:700,fontFamily:"inherit"}}>Log In</button>
+        <button onClick={onSignup} style={{padding:"10px 20px",background:AC,color:"#080808",border:"none",borderRadius:4,fontSize:13,fontWeight:900,fontFamily:"inherit"}}>Get Started</button>
+      </div>
+    </nav>
+    <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"60px 24px",textAlign:"center"}}>
+      <svg width="110" height="44" viewBox="0 0 110 44" style={{marginBottom:28}}>
+        <rect x="32" y="18" width="46" height="8" rx="3" fill={AC}/>
+        <rect x="16" y="10" width="16" height="24" rx="4" fill={AC}/>
+        <rect x="78" y="10" width="16" height="24" rx="4" fill={AC}/>
+        <rect x="6" y="15" width="10" height="14" rx="3" fill={AC}/>
+        <rect x="94" y="15" width="10" height="14" rx="3" fill={AC}/>
+        <rect x="17.5" y="11.5" width="13" height="21" rx="3" fill="#080808" opacity="0.45"/>
+        <rect x="79.5" y="11.5" width="13" height="21" rx="3" fill="#080808" opacity="0.45"/>
+      </svg>
+      <div style={{fontSize:11,fontWeight:700,color:AC,letterSpacing:"0.25em",marginBottom:16}}>PERSONALISED 12 WEEK PLAN</div>
+      <h1 style={{fontFamily:"Arial Black,Arial",fontSize:"clamp(48px,12vw,96px)",fontWeight:900,lineHeight:0.88,letterSpacing:"-0.02em",marginBottom:24}}>
+        YOUR PLAN.<br/><span style={{color:AC}}>YOUR WAY.</span>
+      </h1>
+      <p style={{fontSize:16,color:MU,maxWidth:480,lineHeight:1.75,marginBottom:40}}>
+        Answer 6 questions. Get a 12 week programme built specifically for your goal, your equipment and your schedule.
+      </p>
+      <div style={{width:"100%",maxWidth:360,display:"flex",flexDirection:"column",gap:10}}>
+        <button onClick={onSignup} style={{padding:"16px 40px",background:AC,color:"#080808",fontSize:16,fontWeight:900,letterSpacing:"0.1em",textTransform:"uppercase",border:"none",borderRadius:4,cursor:"pointer",fontFamily:"inherit"}}>
+          Build My Plan — £14.99/mo
+        </button>
+        <button onClick={onLogin} style={{padding:"16px 40px",background:"transparent",color:"#fff",fontSize:15,fontWeight:700,border:`1px solid ${B2}`,borderRadius:4,cursor:"pointer",fontFamily:"inherit"}}>
+          Already have an account? Log in
+        </button>
+      </div>
+      <div style={{display:"flex",flexWrap:"wrap",gap:8,justifyContent:"center",marginTop:40}}>
+        {["Personalised to you","Your equipment","Your schedule","3 Phases","Cancel anytime"].map(f=>(
+          <div key={f} style={{padding:"6px 14px",background:CA,border:`1px solid ${B2}`,borderRadius:100,fontSize:12,color:MU}}>✓ {f}</div>
+        ))}
+      </div>
+    </div>
+    <div style={{background:AC,padding:"16px 24px",textAlign:"center"}}>
+      <span style={{fontFamily:"Arial Black,Arial",fontSize:14,fontWeight:900,color:"#080808",letterSpacing:"0.06em"}}>£14.99/MONTH · PERSONALISED · CANCEL ANYTIME</span>
+    </div>
+  </div>;
+}
+
+// ── AUTH ──────────────────────────────────────────────────────
+function AuthForm({mode,onSuccess,onSwitch,onBack}){
+  const [name,setName]=useState("");
+  const [email,setEmail]=useState("");
+  const [pass,setPass]=useState("");
+  const [errors,setErrors]=useState({});
+  const [loading,setLoading]=useState(false);
+  const [msg,setMsg]=useState("");
+  const isUp=mode==="signup";
+
+  const submit=async()=>{
+    const e={};
+    if(isUp&&!name.trim())e.name="Name is required";
+    if(!email.includes("@"))e.email="Enter a valid email";
+    if(pass.length<6)e.password="Min. 6 characters";
+    if(Object.keys(e).length){setErrors(e);return;}
+    setLoading(true);setErrors({});
+    try{
+      if(isUp){
+        const res=await supa.signUp(email,pass,name);
+        if(res.error){setErrors({email:res.error.message});setLoading(false);return;}
+        if(res.access_token){
+          const paid=await supa.getPaid(res.user.id,res.access_token);
+          onSuccess({token:res.access_token,user:res.user,name,paid});
+        }else{
+          setMsg("✅ Account created! Check your email to confirm, then log in.");
+        }
+      }else{
+        const res=await supa.signIn(email,pass);
+        if(res.error){setErrors({email:res.error.message});setLoading(false);return;}
+        const u=await supa.getUser(res.access_token);
+        const paid=await supa.getPaid(u.id,res.access_token);
+        onSuccess({token:res.access_token,user:u,name:u.user_metadata?.name||email,paid});
+      }
+    }catch{setErrors({email:"Something went wrong."});}
+    setLoading(false);
+  };
+
+  return <div style={{minHeight:"100vh",display:"flex",flexDirection:"column"}}>
+    <nav style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"18px 24px",borderBottom:`1px solid ${BO}`}}>
+      <Logo/>
+      <button onClick={onBack} style={{background:"none",border:"none",color:MU,fontSize:13,cursor:"pointer"}}>← Back</button>
+    </nav>
+    <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",padding:"40px 24px"}}>
+      <div style={{width:"100%",maxWidth:400}}>
+        <h2 style={{fontFamily:"Arial Black,Arial",fontSize:36,fontWeight:900,marginBottom:6}}>{isUp?"Create Account":"Welcome Back"}</h2>
+        <p style={{fontSize:14,color:MU,marginBottom:28,lineHeight:1.6}}>{isUp?"Create your account to get started.":"Log in to access your plan."}</p>
+        {msg
+          ?<div style={{padding:"16px",background:"#1a1a00",border:`1px solid ${AC}44`,borderRadius:4,fontSize:14,color:AC,lineHeight:1.7}}>{msg}</div>
+          :<>
+            {isUp&&<FInput label="Full Name" value={name} onChange={setName} placeholder="Your name" error={errors.name}/>}
+            <FInput label="Email" type="email" value={email} onChange={setEmail} placeholder="your@email.com" error={errors.email}/>
+            <FInput label="Password" type="password" value={pass} onChange={setPass} placeholder="Min. 6 characters" error={errors.password}/>
+            <Btn onClick={submit} disabled={loading}>{loading?"Please wait...":(isUp?"Create Account →":"Log In →")}</Btn>
+            <div style={{textAlign:"center",marginTop:20,fontSize:13,color:MU}}>
+              {isUp?"Already have an account?":"No account?"}{" "}
+              <span onClick={onSwitch} style={{color:AC,cursor:"pointer",fontWeight:700}}>{isUp?"Log in":"Sign up"}</span>
+            </div>
+          </>
+        }
+      </div>
+    </div>
+  </div>;
+}
+
+// ── PAYMENT ───────────────────────────────────────────────────
+function PaymentScreen({session,onPaid}){
+  useEffect(()=>{
+    const p=new URLSearchParams(window.location.search);
+    if(p.get("payment")==="success"){
+      supa.setPaid(session.user.id,session.token).then(()=>{
+        window.history.replaceState({},"",window.location.pathname);
+        onPaid();
+      });
+    }
+  },[]);
+
+  return <div style={{minHeight:"100vh",display:"flex",flexDirection:"column"}}>
+    <nav style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"18px 24px",borderBottom:`1px solid ${BO}`}}>
+      <Logo/>
+      <div style={{display:"flex",alignItems:"center",gap:12}}>
+        <div style={{fontSize:12,color:MU}}>{session.user.email}</div>
+        <button onClick={async()=>{await supa.signOut(session.token);localStorage.removeItem("fadl_session");window.location.reload();}}
+          style={{background:"none",border:`1px solid ${B2}`,color:MU,fontSize:11,padding:"6px 14px",borderRadius:4,fontWeight:700,letterSpacing:"0.1em",fontFamily:"inherit"}}>LOG OUT</button>
+      </div>
+    </nav>
+    <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",padding:"40px 24px"}}>
+      <div style={{width:"100%",maxWidth:420}}>
+        <div style={{fontSize:40,marginBottom:16}}>🎯</div>
+        <h2 style={{fontFamily:"Arial Black,Arial",fontSize:36,fontWeight:900,marginBottom:8}}>Get Your Personal Plan</h2>
+        <p style={{fontSize:15,color:MU,marginBottom:28,lineHeight:1.7}}>
+          Pay once a month. Answer 6 quick questions and we'll build a 12 week programme completely tailored to you.
+        </p>
+        <div style={{padding:"20px",background:CA,borderRadius:6,border:`1px solid ${B2}`,marginBottom:24}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,flexWrap:"wrap",gap:8}}>
+            <div>
+              <div style={{fontSize:15,fontWeight:700}}>Personalised 12 Week Plan</div>
+              <div style={{fontSize:12,color:MU,marginTop:2}}>£14.99/month · Cancel anytime</div>
+            </div>
+            <div style={{fontFamily:"Arial Black,Arial",fontSize:28,fontWeight:900,color:AC}}>£14.99</div>
+          </div>
+          {["Plan built around your goal and equipment","Tailored to your experience level","Nutrition guide for your specific goal","Progress tracker","Update your plan anytime","Cancel anytime — no contracts"].map(f=>(
+            <div key={f} style={{fontSize:13,color:MU,marginBottom:5}}>✓ {f}</div>
+          ))}
+        </div>
+        <button onClick={()=>window.location.href=STRIPE}
+          style={{width:"100%",padding:"16px",background:AC,color:"#080808",fontSize:16,fontWeight:900,letterSpacing:"0.1em",textTransform:"uppercase",border:"none",borderRadius:4,cursor:"pointer",fontFamily:"inherit"}}>
+          Pay £14.99 & Build My Plan →
+        </button>
+        <div style={{display:"flex",justifyContent:"center",gap:20,marginTop:16,flexWrap:"wrap"}}>
+          {["🔒 SSL Encrypted","✓ Powered by Stripe","✓ Cancel anytime"].map(t=>(
+            <div key={t} style={{fontSize:11,color:MU}}>{t}</div>
+          ))}
+        </div>
+      </div>
+    </div>
+  </div>;
+}
+
+// ── QUESTIONNAIRE ─────────────────────────────────────────────
+const QS=[
+  {key:"goal",q:"What's your main goal?",emoji:"🎯",type:"single",options:[
+    {v:"Build muscle",l:"Build Muscle",d:"Get bigger and stronger"},
+    {v:"Lose fat",l:"Lose Fat",d:"Get leaner and more defined"},
+    {v:"Both",l:"Body Recomp",d:"Lose fat and build muscle simultaneously"},
+    {v:"Improve fitness",l:"Improve Fitness",d:"Get fitter and healthier overall"},
+  ]},
+  {key:"days",q:"How many days can you train per week?",emoji:"📅",type:"single",options:[
+    {v:"3",l:"3 Days",d:"Perfect for beginners or busy schedules"},
+    {v:"4",l:"4 Days",d:"The sweet spot for most people"},
+    {v:"5",l:"5 Days",d:"For those ready to commit fully"},
+  ]},
+  {key:"location",q:"Where do you train?",emoji:"📍",type:"single",options:[
+    {v:"Commercial gym",l:"Gym",d:"Full equipment available"},
+    {v:"Home",l:"Home",d:"Limited or no equipment"},
+    {v:"Both gym and home",l:"Both",d:"Mix of sessions"},
+  ]},
+  {key:"equipment",q:"What equipment do you have?",emoji:"🏋️",type:"multi",options:[
+    {v:"Barbell and plates",l:"Barbell"},
+    {v:"Dumbbells",l:"Dumbbells"},
+    {v:"Cable machines",l:"Cables"},
+    {v:"Smith machine",l:"Smith Machine"},
+    {v:"Pull up bar",l:"Pull Up Bar"},
+    {v:"Resistance bands",l:"Bands"},
+    {v:"Bodyweight only",l:"Bodyweight Only"},
+  ]},
+  {key:"experience",q:"What's your experience level?",emoji:"💪",type:"single",options:[
+    {v:"Beginner — less than 1 year",l:"Beginner",d:"Less than 1 year training"},
+    {v:"Intermediate — 1 to 3 years",l:"Intermediate",d:"1–3 years consistent training"},
+    {v:"Advanced — 3+ years",l:"Advanced",d:"3+ years of serious training"},
+  ]},
+  {key:"injuries",q:"Any injuries or areas to avoid?",emoji:"🩹",type:"text",placeholder:"E.g. bad knees, lower back — or type None"},
+  {key:"mobility",q:"Do you have any mobility considerations?",emoji:"♿",type:"single",options:[
+    {v:"None",l:"No limitations",d:"Full range of movement"},
+    {v:"Wheelchair user",l:"Wheelchair User",d:"All exercises adapted for seated training"},
+    {v:"Limited lower body",l:"Limited Lower Body",d:"Upper body focus — seated or standing"},
+    {v:"Limited upper body",l:"Limited Upper Body",d:"Lower body focus where possible"},
+    {v:"Other",l:"Other limitations",d:"We'll work around what you've described above"},
+  ]},
+];
+
+function Questionnaire({name,onComplete}){
+  const [step,setStep]=useState(0);
+  const [ans,setAns]=useState({equipment:[]});
+  const q=QS[step];
+  const prog=(step/QS.length)*100;
+  const answered=q.type==="multi"?(ans.equipment?.length>0):q.type==="text"?(ans[q.key]?.trim().length>0):(!!ans[q.key]);
+
+  return <div style={{minHeight:"100vh",display:"flex",flexDirection:"column"}}>
+    <div style={{height:3,background:"#1a1a1a"}}><div style={{height:"100%",background:AC,width:`${prog}%`,transition:"width 0.4s ease"}}/></div>
+    <div style={{flex:1,display:"flex",flexDirection:"column",padding:"32px 20px",maxWidth:480,margin:"0 auto",width:"100%"}}>
+      <div style={{fontSize:11,color:MU,letterSpacing:"0.15em",marginBottom:32}}>{step+1} OF {QS.length}</div>
+      <div className="fadeIn" key={step}>
+        <div style={{fontSize:48,marginBottom:16}}>{q.emoji}</div>
+        <h2 style={{fontFamily:"Arial Black,Arial",fontSize:28,fontWeight:900,lineHeight:1.1,marginBottom:24}}>{q.q}</h2>
+        {q.type==="single"&&<div style={{display:"flex",flexDirection:"column",gap:10}}>
+          {q.options.map(o=>(
+            <button key={o.v} onClick={()=>setAns(a=>({...a,[q.key]:o.v}))} style={{padding:"16px 20px",borderRadius:6,textAlign:"left",background:ans[q.key]===o.v?"#1a1a00":CA,border:`1px solid ${ans[q.key]===o.v?AC:B2}`,cursor:"pointer",fontFamily:"inherit"}}>
+              <div style={{fontSize:15,fontWeight:700,color:ans[q.key]===o.v?AC:"#fff"}}>{o.l}</div>
+              {o.d&&<div style={{fontSize:12,color:MU,marginTop:3}}>{o.d}</div>}
+            </button>
+          ))}
+        </div>}
+        {q.type==="multi"&&<div style={{display:"flex",flexWrap:"wrap",gap:8}}>
+          {q.options.map(o=>{const sel=ans.equipment?.includes(o.v);return(
+            <button key={o.v} onClick={()=>setAns(a=>{const c=a.equipment||[];return{...a,equipment:c.includes(o.v)?c.filter(x=>x!==o.v):[...c,o.v]};})} style={{padding:"10px 18px",borderRadius:100,background:sel?AC:CA,color:sel?"#080808":MU,border:`1px solid ${sel?AC:B2}`,fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>{o.l}</button>
+          );})}
+        </div>}
+        {q.type==="text"&&<textarea value={ans[q.key]||""} onChange={e=>setAns(a=>({...a,[q.key]:e.target.value}))} placeholder={q.placeholder} rows={3}
+          style={{width:"100%",padding:"14px 16px",background:"#161616",color:"#fff",border:`1px solid ${B2}`,borderRadius:4,fontSize:15,fontFamily:"inherit",resize:"none",boxSizing:"border-box"}}/>}
+      </div>
+      <div style={{marginTop:"auto",paddingTop:32}}>
+        <Btn onClick={()=>{if(step<QS.length-1)setStep(s=>s+1);else onComplete({...ans,name});}} disabled={!answered}>
+          {step<QS.length-1?"Next →":"Generate My Plan →"}
+        </Btn>
+        {step>0&&<button onClick={()=>setStep(s=>s-1)} style={{width:"100%",padding:14,marginTop:10,background:"none",border:"none",color:MU,fontSize:13,cursor:"pointer"}}>← Back</button>}
+      </div>
+    </div>
+  </div>;
+}
+
+// ── GENERATING ────────────────────────────────────────────────
+function Generating(){
+  const [msg,setMsg]=useState(0);
+  const msgs=["Analysing your goal...","Selecting exercises for your equipment...","Building your 3 phase structure...","Personalising your nutrition...","Your plan is ready!"];
+  useEffect(()=>{const t=setInterval(()=>setMsg(i=>Math.min(i+1,msgs.length-1)),600);return()=>clearInterval(t);},[]);
+  return <div style={{minHeight:"100vh",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:32,textAlign:"center"}}>
+    <div style={{width:56,height:56,border:"3px solid #1a1a1a",borderTopColor:AC,borderRadius:"50%",marginBottom:28}} className="spin"/>
+    <div style={{fontFamily:"Arial Black,Arial",fontSize:26,fontWeight:900,marginBottom:12}}>Building Your Plan</div>
+    <div style={{fontSize:15,color:MU}}>{msgs[msg]}</div>
+  </div>;
+}
+
+// ── DASHBOARD ─────────────────────────────────────────────────
+function Dashboard({session,name,plan,profile,onLogout,onNewPlan}){
+  const [tab,setTab]=useState("plan");
+  const [pi,setPi]=useState(0);
+  const [di,setDi]=useState(0);
+  const p=plan.phases[pi];
+  const d=p.days[di];
+
+  return <div style={{minHeight:"100vh",display:"flex",flexDirection:"column"}}>
+    <nav style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"14px 20px",borderBottom:`1px solid ${BO}`,position:"sticky",top:0,background:"rgba(8,8,8,0.97)",backdropFilter:"blur(12px)",zIndex:100}}>
+      <Logo/>
+      <div style={{display:"flex",alignItems:"center",gap:10}}>
+        <span style={{fontSize:12,color:MU}}>Hi, {name?.split(" ")[0]}</span>
+        <button onClick={onLogout} style={{background:"none",border:`1px solid ${B2}`,color:MU,fontSize:11,padding:"6px 12px",borderRadius:4,fontWeight:700,letterSpacing:"0.1em",fontFamily:"inherit"}}>LOG OUT</button>
+      </div>
+    </nav>
+
+    <div style={{display:"flex",borderBottom:`1px solid ${BO}`,overflowX:"auto"}}>
+      {[["plan","💪 My Plan"],["nutrition","🥗 Nutrition"],["tracker","📈 Progress"],["profile","⚙️ Profile"]].map(([k,l])=>(
+        <button key={k} onClick={()=>setTab(k)} style={{padding:"13px 14px",background:"none",border:"none",fontSize:13,fontWeight:700,color:tab===k?AC:MU,borderBottom:`2px solid ${tab===k?AC:"transparent"}`,marginBottom:-1,whiteSpace:"nowrap",fontFamily:"inherit",cursor:"pointer"}}>{l}</button>
+      ))}
+    </div>
+
+    <div style={{flex:1,padding:"20px",maxWidth:800,margin:"0 auto",width:"100%"}}>
+
+      {tab==="plan"&&<>
+        {plan.summary&&<div style={{padding:"14px 18px",background:"#1a1a00",borderRadius:6,border:`1px solid ${AC}33`,marginBottom:20,fontSize:14,color:"#ccc",lineHeight:1.7}}>
+          ✨ <strong style={{color:AC}}>Your plan:</strong> {plan.summary}
+        </div>}
+        {plan.isWheelchair&&<div style={{padding:"14px 18px",background:"#001a1a",borderRadius:6,border:"1px solid #00d4ff44",marginBottom:20,fontSize:14,color:"#ccc",lineHeight:1.7}}>
+          ♿ <strong style={{color:"#00d4ff"}}>Adapted plan:</strong> All exercises in this plan are designed for seated training. Every muscle group can be trained effectively from a wheelchair.
+        </div>}
+
+        <div style={{marginBottom:20}}>
+          <div style={{fontSize:11,fontWeight:700,color:MU,letterSpacing:"0.15em",textTransform:"uppercase",marginBottom:10}}>Phase</div>
+          <div style={{display:"flex",gap:8}}>
+            {plan.phases.map((ph,i)=>(
+              <button key={i} onClick={()=>{setPi(i);setDi(0);}} style={{flex:1,padding:"10px 4px",borderRadius:4,background:pi===i?AC:CA,color:pi===i?"#080808":MU,border:`1px solid ${pi===i?AC:B2}`,fontSize:11,fontWeight:900,textAlign:"center",fontFamily:"inherit",cursor:"pointer"}}>
+                <div>{ph.phase}</div>
+                <div style={{fontSize:10,marginTop:2,opacity:0.7}}>{ph.weeks}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div style={{padding:"16px",background:CA,borderRadius:6,border:`1px solid ${B2}`,borderLeft:`3px solid ${AC}`,marginBottom:20}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:8,marginBottom:8}}>
+            <div>
+              <div style={{fontFamily:"Arial Black,Arial",fontSize:20,fontWeight:900}}>{p.title}</div>
+              <div style={{fontSize:12,color:AC,letterSpacing:"0.1em",marginTop:2}}>{p.weeks}</div>
+            </div>
+            <div style={{display:"flex",gap:8}}>
+              {[`${p.sets} SETS`,`RPE ${p.rpe}`].map(b=><div key={b} style={{padding:"6px 10px",background:"#1a1a00",border:`1px solid ${AC}44`,borderRadius:4,fontSize:11,color:AC,fontWeight:700}}>{b}</div>)}
+            </div>
+          </div>
+          <div style={{fontSize:13,color:MU,lineHeight:1.6}}>{p.desc}</div>
+        </div>
+
+        <div style={{display:"flex",gap:8,marginBottom:16,overflowX:"auto"}}>
+          {p.days.map((dd,i)=>(
+            <button key={i} onClick={()=>setDi(i)} style={{flex:1,minWidth:54,padding:"9px 4px",borderRadius:4,background:di===i?"#fff":CA,color:di===i?"#080808":MU,border:`1px solid ${di===i?"#fff":B2}`,fontSize:11,fontWeight:900,fontFamily:"inherit",cursor:"pointer",whiteSpace:"nowrap"}}>{dd.label}</button>
+          ))}
+        </div>
+
+        <div style={{padding:"14px 16px",background:CA,borderRadius:"6px 6px 0 0",border:`1px solid ${B2}`,borderBottom:"none"}}>
+          <div style={{fontFamily:"Arial Black,Arial",fontSize:17,fontWeight:900}}>{d.label}</div>
+          <div style={{fontSize:12,color:AC,letterSpacing:"0.08em",fontWeight:700,marginTop:2}}>{d.focus}</div>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 50px 80px 55px",padding:"9px 16px",background:"#080808",borderLeft:`1px solid ${B2}`,borderRight:`1px solid ${B2}`}}>
+          {["EXERCISE","SETS","REPS","REST"].map(h=><div key={h} style={{fontSize:10,fontWeight:700,color:AC,letterSpacing:"0.15em"}}>{h}</div>)}
+        </div>
+        {d.exercises.map((ex,i)=>(
+          <div key={i} style={{background:i%2===0?CA:"#161616",borderLeft:`1px solid ${B2}`,borderRight:`1px solid ${B2}`,borderBottom:i===d.exercises.length-1?`1px solid ${B2}`:"1px solid #222",borderRadius:i===d.exercises.length-1?"0 0 6px 6px":0}}>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 50px 80px 55px",padding:"12px 16px"}}>
+              <div style={{fontSize:14,fontWeight:700}}>{ex.name}</div>
+              <div style={{fontSize:14,color:AC,fontWeight:700,textAlign:"center"}}>{p.sets}</div>
+              <div style={{fontSize:13,color:"#ccc",textAlign:"center"}}>{ex.reps}</div>
+              <div style={{fontSize:13,color:MU,textAlign:"center"}}>{ex.rest}</div>
+            </div>
+            {ex.tip&&<div style={{padding:"0 16px 10px",fontSize:12,color:"#555",fontStyle:"italic"}}>💡 {ex.tip}</div>}
+          </div>
+        ))}
+        <div style={{marginTop:14,padding:"12px 16px",background:"#1a1a00",borderRadius:4,border:`1px solid ${AC}33`,fontSize:13,color:MU,lineHeight:1.6}}>
+          <strong style={{color:"#fff"}}>Progressive overload:</strong> Add weight or reps every single week. This is the only rule that matters.
+        </div>
+      </>}
+
+      {tab==="nutrition"&&<>
+        <h2 style={{fontFamily:"Arial Black,Arial",fontSize:28,fontWeight:900,marginBottom:6}}>Your Nutrition</h2>
+        <p style={{fontSize:14,color:MU,marginBottom:24,lineHeight:1.6}}>Tailored to your goal: <strong style={{color:AC}}>{profile?.goal}</strong></p>
+        {[
+          {title:"Daily Calories",value:plan.nutrition?.calories},
+          {title:"Daily Protein",value:plan.nutrition?.protein},
+        ].map((item,i)=>(
+          <div key={i} style={{padding:"16px 18px",background:i%2===0?CA:"#161616",borderRadius:6,marginBottom:8,borderLeft:`3px solid ${AC}`,display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8}}>
+            <div style={{fontSize:15,fontWeight:700}}>{item.title}</div>
+            <div style={{fontSize:13,fontWeight:700,color:AC}}>{item.value}</div>
+          </div>
+        ))}
+        {plan.nutrition?.tips?.map((tip,i)=>(
+          <div key={i} style={{padding:"14px 18px",background:"#161616",borderRadius:6,marginBottom:8,fontSize:14,color:MU,lineHeight:1.6}}>💡 {tip}</div>
+        ))}
+      </>}
+
+      {tab==="tracker"&&<>
+        <h2 style={{fontFamily:"Arial Black,Arial",fontSize:28,fontWeight:900,marginBottom:6}}>Progress Tracker</h2>
+        <p style={{fontSize:14,color:MU,marginBottom:24}}>Fill this in every 4 weeks. Progress that isn't tracked isn't progress.</p>
+        {["Weight (kg)","Chest (cm)","Waist (cm)","Bench Press 1RM (kg)","Squat 1RM (kg)","Deadlift 1RM (kg)","Pull Ups (max reps)"].map((m,i)=>(
+          <div key={i} style={{padding:"14px",background:CA,borderRadius:6,marginBottom:10,border:`1px solid ${B2}`}}>
+            <div style={{fontSize:13,fontWeight:700,marginBottom:10}}>{m}</div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8}}>
+              {["Week 1","Week 4","Week 8","Week 12"].map(w=>(
+                <div key={w}>
+                  <div style={{fontSize:10,color:MU,letterSpacing:"0.1em",marginBottom:4}}>{w.toUpperCase()}</div>
+                  <input type="number" placeholder="—" style={{width:"100%",padding:"10px 8px",background:"#161616",color:"#fff",border:`1px solid ${B2}`,borderRadius:4,fontSize:14,textAlign:"center",fontFamily:"inherit",boxSizing:"border-box"}}/>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </>}
+
+      {tab==="profile"&&<>
+        <h2 style={{fontFamily:"Arial Black,Arial",fontSize:28,fontWeight:900,marginBottom:6}}>Your Profile</h2>
+        <p style={{fontSize:14,color:MU,marginBottom:24}}>Your plan is built around these answers.</p>
+        {profile&&Object.entries({
+          "Goal":profile.goal,
+          "Training Days":`${profile.days} days per week`,
+          "Location":profile.location,
+          "Equipment":Array.isArray(profile.equipment)?profile.equipment.join(", "):profile.equipment,
+          "Experience":profile.experience,
+          "Injuries":profile.injuries||"None",
+        }).map(([k,v])=>(
+          <div key={k} style={{display:"flex",justifyContent:"space-between",padding:"14px 18px",background:CA,borderRadius:6,marginBottom:8,border:`1px solid ${B2}`,flexWrap:"wrap",gap:8}}>
+            <div style={{fontSize:13,color:MU}}>{k}</div>
+            <div style={{fontSize:13,fontWeight:700,color:"#fff",textAlign:"right"}}>{v}</div>
+          </div>
+        ))}
+        <div style={{marginTop:20}}>
+          <Btn onClick={onNewPlan} ghost>Update Answers & Regenerate Plan</Btn>
+        </div>
+      </>}
+    </div>
+  </div>;
+}
+
+// ── APP ───────────────────────────────────────────────────────
+function App(){
+  const [screen,setScreen]=useState("landing");
+  const [session,setSession]=useState(null);
+  const [name,setName]=useState("");
+  const [plan,setPlan]=useState(null);
+  const [profile,setProfile]=useState(null);
+
+  // On load — restore session, clear any stale state
+  useEffect(()=>{
+    // Check for payment success first
+    const params=new URLSearchParams(window.location.search);
+    if(params.get("payment")==="success"){
+      const saved=localStorage.getItem("fadl_session");
+      if(saved){
+        try{
+          const s=JSON.parse(saved);
+          supa.setPaid(s.user.id,s.token).then(()=>{
+            const updated={...s,paid:true};
+            localStorage.setItem("fadl_session",JSON.stringify(updated));
+            setSession(updated);setName(updated.name||"");
+            window.history.replaceState({},"",window.location.pathname);
+            setScreen("questionnaire");
+          });
+        }catch{}
+      }
+      return;
+    }
+
+    const saved=localStorage.getItem("fadl_session");
+    if(saved){
+      try{
+        const s=JSON.parse(saved);
+        setSession(s);setName(s.name||"");
+        // Always verify payment from Supabase — never trust localStorage cache
+        supa.getPaid(s.user.id,s.token).then(isPaid=>{
+          if(!isPaid){
+            // Not paid — update cache and show payment screen
+            const updated={...s,paid:false};
+            localStorage.setItem("fadl_session",JSON.stringify(updated));
+            setScreen("payment");
+            return;
+          }
+          // Paid — update cache and check for existing plan
+          const updated={...s,paid:true};
+          localStorage.setItem("fadl_session",JSON.stringify(updated));
+          supa.getPlan(s.user.id,s.token).then(existingPlan=>{
+            if(existingPlan){
+              setPlan(existingPlan);
+              const savedProfile=localStorage.getItem("fadl_profile");
+              if(savedProfile)setProfile(JSON.parse(savedProfile));
+              setScreen("dashboard");
+            }else{
+              setScreen("questionnaire");
+            }
+          });
+        }).catch(()=>setScreen("payment"));
+      }catch{localStorage.removeItem("fadl_session");}
+    }
+  },[]);
+
+  const handleAuth=(s)=>{
+    setSession(s);setName(s.name||"");
+    localStorage.setItem("fadl_session",JSON.stringify({...s,paid:false}));
+    // Always check Supabase for payment status
+    supa.getPaid(s.user.id,s.token).then(isPaid=>{
+      if(!isPaid){setScreen("payment");return;}
+      const updated={...s,paid:true};
+      localStorage.setItem("fadl_session",JSON.stringify(updated));
+      supa.getPlan(s.user.id,s.token).then(existing=>{
+        if(existing){setPlan(existing);const sp=localStorage.getItem("fadl_profile");if(sp)setProfile(JSON.parse(sp));setScreen("dashboard");}
+        else setScreen("questionnaire");
+      });
+    }).catch(()=>setScreen("payment"));
+  };
+
+  const handlePaid=()=>{
+    const updated={...session,paid:true};
+    setSession(updated);localStorage.setItem("fadl_session",JSON.stringify(updated));
+    setScreen("questionnaire");
+  };
+
+  const handleQuestionnaire=(answers)=>{
+    setProfile(answers);
+    localStorage.setItem("fadl_profile",JSON.stringify(answers));
+    setScreen("generating");
+    // Small delay so generating screen shows
+    setTimeout(()=>{
+      const generated=generatePlan(answers);
+      supa.savePlan(session.user.id,session.token,generated).then(()=>{
+        setPlan(generated);setScreen("dashboard");
+      }).catch(()=>{
+        // Even if save fails, show the plan
+        setPlan(generated);setScreen("dashboard");
+      });
+    },2800);
+  };
+
+  const handleLogout=async()=>{
+    if(session?.token)await supa.signOut(session.token);
+    localStorage.removeItem("fadl_session");
+    localStorage.removeItem("fadl_profile");
+    setSession(null);setPlan(null);setProfile(null);setScreen("landing");
+  };
+
+  const handleNewPlan=()=>{setScreen("questionnaire");};
+
+  return <div style={{background:"#080808",color:"#fff",minHeight:"100vh",fontFamily:"'Helvetica Neue',Arial,sans-serif"}}>
+    <style>{`*{box-sizing:border-box;margin:0;padding:0}button:active{opacity:0.85;transform:scale(0.98)}::-webkit-scrollbar{width:5px}::-webkit-scrollbar-thumb{background:#333;border-radius:3px}`}</style>
+    {screen==="landing"      &&<Landing onSignup={()=>setScreen("signup")} onLogin={()=>setScreen("login")}/>}
+    {screen==="signup"       &&<AuthForm mode="signup" onSuccess={handleAuth} onSwitch={()=>setScreen("login")} onBack={()=>setScreen("landing")}/>}
+    {screen==="login"        &&<AuthForm mode="login" onSuccess={handleAuth} onSwitch={()=>setScreen("signup")} onBack={()=>setScreen("landing")}/>}
+    {screen==="payment"      &&session&&<PaymentScreen session={session} onPaid={handlePaid}/>}
+    {screen==="questionnaire"&&session&&<Questionnaire name={name} onComplete={handleQuestionnaire}/>}
+    {screen==="generating"   &&<Generating/>}
+    {screen==="dashboard"    &&session&&plan&&<Dashboard session={session} name={name} plan={plan} profile={profile} onLogout={handleLogout} onNewPlan={handleNewPlan}/>}
+  </div>;
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>
