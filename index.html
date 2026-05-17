@@ -43,6 +43,8 @@ const supa={
   async setPaid(uid,tok){await fetch(`${SUPA_URL}/rest/v1/purchases`,{method:"POST",headers:{...H(tok),"Prefer":"return=minimal"},body:JSON.stringify({user_id:uid,product:"12_week_plan",purchased_at:new Date().toISOString()})});},
   async savePlan(uid,tok,plan){try{await fetch(`${SUPA_URL}/rest/v1/user_plans`,{method:"POST",headers:{...H(tok),"Prefer":"resolution=merge-duplicates,return=minimal"},body:JSON.stringify({user_id:uid,plan_data:JSON.stringify(plan),created_at:new Date().toISOString()})});}catch(e){console.log("save plan err",e);}},
   async getPlan(uid,tok){try{const r=await fetch(`${SUPA_URL}/rest/v1/user_plans?user_id=eq.${uid}&select=*&limit=1`,{headers:H(tok)});const d=await r.json();return Array.isArray(d)&&d.length>0?JSON.parse(d[0].plan_data):null;}catch{return null;}},
+  async saveTracker(uid,tok,data){try{await fetch(`${SUPA_URL}/rest/v1/user_tracker`,{method:"POST",headers:{...H(tok),"Prefer":"resolution=merge-duplicates,return=minimal"},body:JSON.stringify({user_id:uid,tracker_data:JSON.stringify(data),updated_at:new Date().toISOString()})});}catch(e){console.log("save tracker err",e);}},
+  async getTracker(uid,tok){try{const r=await fetch(`${SUPA_URL}/rest/v1/user_tracker?user_id=eq.${uid}&select=*&limit=1`,{headers:H(tok)});const d=await r.json();return Array.isArray(d)&&d.length>0?JSON.parse(d[0].tracker_data):null;}catch{return null;}},
 };
 
 // ── PLAN GENERATOR ────────────────────────────────────────────
@@ -414,6 +416,18 @@ function PaymentScreen({session,onPaid}){
             <div key={f} style={{fontSize:13,color:MU,marginBottom:5}}>✓ {f}</div>
           ))}
         </div>
+        <div style={{display:"flex",gap:10,alignItems:"flex-start",marginBottom:8,padding:"14px",background:"#161616",borderRadius:6,border:`1px solid ${B2}`}}>
+          <input type="checkbox" id="terms" style={{marginTop:3,accentColor:AC,width:16,height:16,flexShrink:0}}/>
+          <label htmlFor="terms" style={{fontSize:13,color:MU,lineHeight:1.6,cursor:"pointer"}}>
+            I agree to the <strong style={{color:"#fff"}}>Terms & Conditions</strong>. I understand this is a monthly subscription and all payments are non-refundable. I can cancel anytime by emailing fitnessalldaylong@protonmail.com.
+          </label>
+        </div>
+        <div style={{display:"flex",gap:10,alignItems:"flex-start",marginBottom:16,padding:"14px",background:"#161616",borderRadius:6,border:`1px solid ${B2}`}}>
+          <input type="checkbox" id="cooling" style={{marginTop:3,accentColor:AC,width:16,height:16,flexShrink:0}}/>
+          <label htmlFor="cooling" style={{fontSize:13,color:MU,lineHeight:1.6,cursor:"pointer"}}>
+            I request immediate access to the digital content and <strong style={{color:"#fff"}}>acknowledge that I waive my 14-day cooling off right</strong> under the Consumer Contracts Regulations 2013, as the service will begin immediately upon payment.
+          </label>
+        </div>
         <button onClick={()=>window.location.href=STRIPE}
           style={{width:"100%",padding:"16px",background:AC,color:"#080808",fontSize:16,fontWeight:900,letterSpacing:"0.1em",textTransform:"uppercase",border:"none",borderRadius:4,cursor:"pointer",fontFamily:"inherit"}}>
           Pay £14.99 & Build My Plan →
@@ -435,6 +449,13 @@ const QS=[
     {v:"Lose fat",l:"Lose Fat",d:"Get leaner and more defined"},
     {v:"Both",l:"Body Recomp",d:"Lose fat and build muscle simultaneously"},
     {v:"Improve fitness",l:"Improve Fitness",d:"Get fitter and healthier overall"},
+  ]},
+  {key:"mobility",q:"Do you have any physical considerations?",emoji:"♿",type:"single",options:[
+    {v:"None",l:"No limitations",d:"Full range of movement — standard plan"},
+    {v:"Wheelchair user",l:"Wheelchair User",d:"Fully seated programme — all exercises adapted for you"},
+    {v:"Limited lower body",l:"Limited Lower Body",d:"Upper body focus — seated or standing exercises"},
+    {v:"Limited upper body",l:"Limited Upper Body",d:"Lower body and core focus"},
+    {v:"Other",l:"Other",d:"Describe below and we'll build around it"},
   ]},
   {key:"days",q:"How many days can you train per week?",emoji:"📅",type:"single",options:[
     {v:"3",l:"3 Days",d:"Perfect for beginners or busy schedules"},
@@ -461,13 +482,6 @@ const QS=[
     {v:"Advanced — 3+ years",l:"Advanced",d:"3+ years of serious training"},
   ]},
   {key:"injuries",q:"Any injuries or areas to avoid?",emoji:"🩹",type:"text",placeholder:"E.g. bad knees, lower back — or type None"},
-  {key:"mobility",q:"Do you have any mobility considerations?",emoji:"♿",type:"single",options:[
-    {v:"None",l:"No limitations",d:"Full range of movement"},
-    {v:"Wheelchair user",l:"Wheelchair User",d:"All exercises adapted for seated training"},
-    {v:"Limited lower body",l:"Limited Lower Body",d:"Upper body focus — seated or standing"},
-    {v:"Limited upper body",l:"Limited Upper Body",d:"Lower body focus where possible"},
-    {v:"Other",l:"Other limitations",d:"We'll work around what you've described above"},
-  ]},
 ];
 
 function Questionnaire({name,onComplete}){
@@ -522,6 +536,395 @@ function Generating(){
   </div>;
 }
 
+// ── FAQ ITEM ──────────────────────────────────────────────────
+function FAQItem({q,a}){
+  const [open,setOpen]=useState(false);
+  return <div style={{background:CA,borderRadius:6,marginBottom:8,border:`1px solid ${B2}`,overflow:"hidden"}}>
+    <button onClick={()=>setOpen(o=>!o)} style={{width:"100%",padding:"16px",background:"none",border:"none",display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer",gap:12,fontFamily:"inherit"}}>
+      <div style={{fontSize:14,fontWeight:700,color:"#fff",textAlign:"left",lineHeight:1.4}}>{q}</div>
+      <div style={{fontSize:18,color:AC,flexShrink:0,transform:open?"rotate(45deg)":"none",transition:"transform 0.2s"}}>+</div>
+    </button>
+    {open&&<div style={{padding:"0 16px 16px",fontSize:14,color:MU,lineHeight:1.75,borderTop:`1px solid ${B2}`}}>
+      <div style={{height:12}}/>
+      {a}
+    </div>}
+  </div>;
+}
+
+// ── TRACKER ───────────────────────────────────────────────────
+const METRICS=["Weight (kg)","Chest (cm)","Waist (cm)","Arm (cm)","Waist (cm)","Bench Press 1RM (kg)","Squat 1RM (kg)","Deadlift 1RM (kg)","Pull Ups (max reps)"];
+const WEEKS=["Week 1","Week 4","Week 8","Week 12"];
+
+function Tracker({session}){
+  const [data,setData]=useState({});
+  const [saved,setSaved]=useState(false);
+  const [loading,setLoading]=useState(true);
+  const [saving,setSaving]=useState(false);
+
+  useEffect(()=>{
+    supa.getTracker(session.user.id,session.token).then(d=>{
+      if(d)setData(d);
+      setLoading(false);
+    }).catch(()=>setLoading(false));
+  },[]);
+
+  const update=(metric,week,val)=>{
+    setSaved(false);
+    setData(d=>({...d,[metric]:{...(d[metric]||{}),[week]:val}}));
+  };
+
+  const save=async()=>{
+    setSaving(true);
+    await supa.saveTracker(session.user.id,session.token,data);
+    setSaving(false);setSaved(true);
+    setTimeout(()=>setSaved(false),3000);
+  };
+
+  if(loading)return <div style={{padding:40,textAlign:"center",color:MU}}>Loading your progress...</div>;
+
+  return <>
+    <h2 style={{fontFamily:"Arial Black,Arial",fontSize:28,fontWeight:900,marginBottom:6}}>Progress Tracker</h2>
+    <p style={{fontSize:14,color:MU,marginBottom:24,lineHeight:1.6}}>Fill this in every 4 weeks. Your data saves automatically to your account — never lose your progress.</p>
+
+    {METRICS.map((m,i)=>(
+      <div key={i} style={{padding:"14px",background:CA,borderRadius:6,marginBottom:10,border:`1px solid ${B2}`}}>
+        <div style={{fontSize:13,fontWeight:700,marginBottom:10}}>{m}</div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8}}>
+          {WEEKS.map(w=>(
+            <div key={w}>
+              <div style={{fontSize:10,color:MU,letterSpacing:"0.1em",marginBottom:4}}>{w.toUpperCase()}</div>
+              <input type="number" placeholder="—" value={data[m]?.[w]||""}
+                onChange={e=>update(m,w,e.target.value)}
+                style={{width:"100%",padding:"10px 8px",background:"#161616",color:"#fff",border:`1px solid ${B2}`,borderRadius:4,fontSize:14,textAlign:"center",fontFamily:"inherit",boxSizing:"border-box"}}/>
+            </div>
+          ))}
+        </div>
+      </div>
+    ))}
+
+    <button onClick={save} disabled={saving} style={{width:"100%",padding:"15px",background:saved?"#1a3300":AC,color:saved?"#7fff00":CA,fontSize:15,fontWeight:900,letterSpacing:"0.1em",textTransform:"uppercase",border:`1px solid ${saved?"#2a5500":"transparent"}`,borderRadius:4,cursor:saving?"not-allowed":"pointer",fontFamily:"inherit",marginTop:8,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+      {saving&&<div style={{width:16,height:16,border:"2px solid #555",borderTopColor:CA,borderRadius:"50%"}} className="spin"/>}
+      {saved?"✅ Progress Saved!":saving?"Saving...":"Save My Progress"}
+    </button>
+
+    <div style={{marginTop:12,padding:"12px 16px",background:"#111",borderRadius:6,fontSize:13,color:MU,lineHeight:1.7}}>
+      💡 Fill in <strong style={{color:"#fff"}}>Week 1</strong> when you start. Come back every 4 weeks to update. Your data is saved to your account and will be here every time you log in.
+    </div>
+  </>;
+}
+
+// ── NUTRITION GUIDE ───────────────────────────────────────────
+function NutritionGuide({profile,plan}){
+  const [weightKg,setWeightKg]=useState("");
+  const [heightCm,setHeightCm]=useState("");
+  const [age,setAge]=useState("");
+  const [sex,setSex]=useState("");
+  const [activity,setActivity]=useState("");
+  const [diet,setDiet]=useState("");
+  const [meals,setMeals]=useState("");
+  const [calculated,setCalculated]=useState(null);
+  const [step,setStep]=useState("intro"); // intro | form | results
+
+  const goal=profile?.goal||"Build muscle";
+  const isLose=goal.includes("Lose")||goal.includes("fat");
+  const isBuild=goal.includes("Build")||goal.includes("muscle");
+
+  const activityMults={
+    "Sedentary (desk job, little exercise)":1.2,
+    "Lightly active (1-3 days training)":1.375,
+    "Moderately active (3-5 days training)":1.55,
+    "Very active (6-7 days hard training)":1.725,
+  };
+
+  const calculate=()=>{
+    const w=parseFloat(weightKg);
+    const h=parseFloat(heightCm);
+    const a=parseInt(age);
+    if(!w||!h||!a||!sex||!activity)return;
+
+    // Mifflin-St Jeor BMR
+    const bmr=sex==="Prefer not to say"
+      ?(((10*w)+(6.25*h)-(5*a)+5)+((10*w)+(6.25*h)-(5*a)-161))/2 // average of male and female
+      :sex==="Male"
+      ?(10*w)+(6.25*h)-(5*a)+5
+      :(10*w)+(6.25*h)-(5*a)-161;
+
+    const tdee=Math.round(bmr*(activityMults[activity]||1.55));
+    const targetCals=isLose?tdee-400:isBuild?tdee+250:tdee;
+    const proteinG=Math.round(w*2.2*(isLose?1.2:1.0));
+    const fatG=Math.round(targetCals*0.25/9);
+    const carbG=Math.round((targetCals-(proteinG*4)-(fatG*9))/4);
+
+    // Meal split
+    const mealCount=parseInt(meals)||3;
+    const calsPerMeal=Math.round(targetCals/mealCount);
+    const proteinPerMeal=Math.round(proteinG/mealCount);
+
+    // Food lists based on diet preference
+    const proteins={
+      "No preference":["Chicken breast","Lean beef mince","Salmon","Tuna","Eggs","Greek yogurt","Cottage cheese","Whey protein"],
+      "Vegetarian":["Eggs","Greek yogurt","Cottage cheese","Whey protein","Tempeh","Edamame","Lentils","Chickpeas"],
+      "Vegan":["Tempeh","Edamame","Lentils","Chickpeas","Tofu","Hemp seeds","Pea protein","Black beans"],
+      "Dairy free":["Chicken breast","Lean beef","Salmon","Tuna","Eggs","Tempeh","Lentils","Pea protein"],
+    };
+    const carbs=["Oats","White rice","Sweet potato","Wholegrain bread","Banana","Pasta","Rice cakes","Fruit"];
+    const fats=["Avocado","Olive oil","Nuts","Nut butter","Eggs","Salmon","Seeds","Dark chocolate"];
+    const veg=["Spinach","Broccoli","Peppers","Cucumber","Tomatoes","Courgette","Green beans","Kale"];
+
+    // Sample meals based on diet and goal
+    const mealPlans={
+      3:{
+        "No preference":[
+          {time:"Breakfast",meal:"Oats with banana, 2 eggs scrambled",cals:Math.round(calsPerMeal*0.3),protein:Math.round(proteinPerMeal*0.3)},
+          {time:"Lunch",meal:"Chicken breast, white rice, mixed veg",cals:Math.round(calsPerMeal*1.1),protein:Math.round(proteinPerMeal*1.1)},
+          {time:"Dinner",meal:"Salmon, sweet potato, broccoli",cals:Math.round(calsPerMeal*1.1),protein:Math.round(proteinPerMeal*1.1)},
+        ],
+        "Vegetarian":[
+          {time:"Breakfast",meal:"Greek yogurt, oats, banana, nut butter",cals:Math.round(calsPerMeal*0.9),protein:Math.round(proteinPerMeal*0.9)},
+          {time:"Lunch",meal:"Tempeh stir fry with rice and veg",cals:Math.round(calsPerMeal),protein:Math.round(proteinPerMeal)},
+          {time:"Dinner",meal:"Lentil curry with rice, cottage cheese on side",cals:Math.round(calsPerMeal*1.1),protein:Math.round(proteinPerMeal*1.1)},
+        ],
+        "Vegan":[
+          {time:"Breakfast",meal:"Oats with pea protein, banana, nut butter",cals:Math.round(calsPerMeal*0.9),protein:Math.round(proteinPerMeal*0.9)},
+          {time:"Lunch",meal:"Tofu stir fry with rice and broccoli",cals:Math.round(calsPerMeal),protein:Math.round(proteinPerMeal)},
+          {time:"Dinner",meal:"Lentil and chickpea curry, brown rice",cals:Math.round(calsPerMeal*1.1),protein:Math.round(proteinPerMeal*1.1)},
+        ],
+        "Dairy free":[
+          {time:"Breakfast",meal:"Eggs, oats with banana, black coffee",cals:Math.round(calsPerMeal*0.9),protein:Math.round(proteinPerMeal*0.9)},
+          {time:"Lunch",meal:"Chicken, rice, mixed veg, olive oil",cals:Math.round(calsPerMeal),protein:Math.round(proteinPerMeal)},
+          {time:"Dinner",meal:"Salmon, sweet potato, green beans",cals:Math.round(calsPerMeal*1.1),protein:Math.round(proteinPerMeal*1.1)},
+        ],
+      },
+    };
+
+    const dietKey=diet||"No preference";
+    const sampleMeals=mealPlans[3][dietKey]||mealPlans[3]["No preference"];
+
+    setCalculated({tdee,targetCals,proteinG,fatG,carbG,calsPerMeal,proteinPerMeal,
+      proteins:proteins[dietKey]||proteins["No preference"],carbs,fats,veg,sampleMeals,mealCount});
+    setStep("results");
+  };
+
+  if(step==="intro") return <>
+    <h2 style={{fontFamily:"Arial Black,Arial",fontSize:28,fontWeight:900,marginBottom:6}}>Your Nutrition Guide</h2>
+    <p style={{fontSize:14,color:MU,marginBottom:24,lineHeight:1.6}}>Personalised calorie and macro targets based on your body and goal.</p>
+    <div style={{padding:"20px",background:"#1a1a00",borderRadius:6,border:`1px solid ${AC}33`,marginBottom:24,fontSize:14,color:"#ccc",lineHeight:1.7}}>
+      ⚠️ <strong style={{color:AC}}>Important:</strong> This is general fitness nutrition guidance only. It is not medical advice. If you have a medical condition, food allergy or specific dietary requirement please consult a qualified healthcare professional before making changes to your diet.
+    </div>
+    <div style={{padding:"24px",background:CA,borderRadius:8,border:`1px solid ${B2}`,marginBottom:16}}>
+      <div style={{fontFamily:"Arial Black,Arial",fontSize:20,fontWeight:900,marginBottom:8}}>What you'll get</div>
+      {["Your personalised daily calorie target","Protein, carb and fat targets in grams","A sample meal plan for your goal","Best foods for your dietary preference","Supplement recommendations","Meal timing around your training"].map((item,i)=>(
+        <div key={i} style={{fontSize:14,color:MU,marginBottom:6,paddingLeft:4}}>✓ {item}</div>
+      ))}
+    </div>
+    <Btn onClick={()=>setStep("form")}>Calculate My Nutrition →</Btn>
+    <div style={{marginTop:12,fontSize:12,color:"#444",textAlign:"center",lineHeight:1.7}}>
+      Takes 60 seconds. Based on your body stats, goal and dietary preferences.
+    </div>
+  </>;
+
+  if(step==="form") return <>
+    <h2 style={{fontFamily:"Arial Black,Arial",fontSize:28,fontWeight:900,marginBottom:6}}>Your Details</h2>
+    <p style={{fontSize:14,color:MU,marginBottom:24}}>Fill in your stats to get accurate targets.</p>
+
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:4}}>
+      <div>
+        <label style={{fontSize:11,fontWeight:700,color:MU,letterSpacing:"0.15em",textTransform:"uppercase",display:"block",marginBottom:8}}>Weight (kg)</label>
+        <input type="number" value={weightKg} onChange={e=>setWeightKg(e.target.value)} placeholder="e.g. 80"
+          style={{width:"100%",padding:"14px",background:"#161616",color:"#fff",border:`1px solid ${B2}`,borderRadius:4,fontSize:15,fontFamily:"inherit",boxSizing:"border-box"}}/>
+      </div>
+      <div>
+        <label style={{fontSize:11,fontWeight:700,color:MU,letterSpacing:"0.15em",textTransform:"uppercase",display:"block",marginBottom:8}}>Height (cm)</label>
+        <input type="number" value={heightCm} onChange={e=>setHeightCm(e.target.value)} placeholder="e.g. 175"
+          style={{width:"100%",padding:"14px",background:"#161616",color:"#fff",border:`1px solid ${B2}`,borderRadius:4,fontSize:15,fontFamily:"inherit",boxSizing:"border-box"}}/>
+      </div>
+    </div>
+
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:16}}>
+      <div>
+        <label style={{fontSize:11,fontWeight:700,color:MU,letterSpacing:"0.15em",textTransform:"uppercase",display:"block",marginBottom:8}}>Age</label>
+        <input type="number" value={age} onChange={e=>setAge(e.target.value)} placeholder="e.g. 25"
+          style={{width:"100%",padding:"14px",background:"#161616",color:"#fff",border:`1px solid ${B2}`,borderRadius:4,fontSize:15,fontFamily:"inherit",boxSizing:"border-box"}}/>
+      </div>
+      <div>
+        <label style={{fontSize:11,fontWeight:700,color:MU,letterSpacing:"0.15em",textTransform:"uppercase",display:"block",marginBottom:4}}>Biological Sex</label>
+        <div style={{fontSize:11,color:"#444",marginBottom:8}}>Used for calorie calculation only</div>
+        <select value={sex} onChange={e=>setSex(e.target.value)}
+          style={{width:"100%",padding:"14px",background:"#161616",color:sex?"#fff":MU,border:`1px solid ${B2}`,borderRadius:4,fontSize:15,fontFamily:"inherit",boxSizing:"border-box"}}>
+          <option value="">Select</option>
+          <option>Male</option>
+          <option>Female</option>
+          <option>Prefer not to say</option>
+        </select>
+      </div>
+    </div>
+
+    <div style={{marginBottom:16}}>
+      <label style={{fontSize:11,fontWeight:700,color:MU,letterSpacing:"0.15em",textTransform:"uppercase",display:"block",marginBottom:10}}>Activity Level</label>
+      {["Sedentary (desk job, little exercise)","Lightly active (1-3 days training)","Moderately active (3-5 days training)","Very active (6-7 days hard training)"].map(o=>(
+        <button key={o} onClick={()=>setActivity(o)} style={{display:"block",width:"100%",padding:"13px 16px",marginBottom:6,borderRadius:4,textAlign:"left",background:activity===o?"#1a1a00":CA,border:`1px solid ${activity===o?AC:B2}`,color:activity===o?AC:"#aaa",fontSize:13,fontFamily:"inherit",cursor:"pointer"}}>
+          {o}
+        </button>
+      ))}
+    </div>
+
+    <div style={{marginBottom:16}}>
+      <label style={{fontSize:11,fontWeight:700,color:MU,letterSpacing:"0.15em",textTransform:"uppercase",display:"block",marginBottom:10}}>Dietary Preference</label>
+      <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
+        {["No preference","Vegetarian","Vegan","Dairy free"].map(o=>(
+          <button key={o} onClick={()=>setDiet(o)} style={{padding:"10px 18px",borderRadius:100,background:diet===o?AC:CA,color:diet===o?"#080808":MU,border:`1px solid ${diet===o?AC:B2}`,fontSize:13,fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>
+            {o}
+          </button>
+        ))}
+      </div>
+    </div>
+
+    <div style={{marginBottom:24}}>
+      <label style={{fontSize:11,fontWeight:700,color:MU,letterSpacing:"0.15em",textTransform:"uppercase",display:"block",marginBottom:10}}>How many meals per day?</label>
+      <div style={{display:"flex",gap:8}}>
+        {["2","3","4","5","6"].map(o=>(
+          <button key={o} onClick={()=>setMeals(o)} style={{flex:1,padding:"13px 4px",borderRadius:4,background:meals===o?AC:CA,color:meals===o?"#080808":MU,border:`1px solid ${meals===o?AC:B2}`,fontSize:15,fontWeight:900,fontFamily:"inherit",cursor:"pointer"}}>
+            {o}
+          </button>
+        ))}
+      </div>
+    </div>
+
+    <Btn onClick={calculate} disabled={!weightKg||!heightCm||!age||!sex||!activity||!diet||!meals}>
+      Generate My Nutrition Plan →
+    </Btn>
+    <button onClick={()=>setStep("intro")} style={{width:"100%",padding:14,marginTop:10,background:"none",border:"none",color:MU,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>← Back</button>
+  </>;
+
+  if(step==="results"&&calculated) return <>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20,flexWrap:"wrap",gap:10}}>
+      <h2 style={{fontFamily:"Arial Black,Arial",fontSize:28,fontWeight:900}}>Your Nutrition Plan</h2>
+      <button onClick={()=>setStep("form")} style={{padding:"8px 16px",background:"#1a1a1a",border:`1px solid ${B2}`,color:MU,fontSize:12,borderRadius:4,cursor:"pointer",fontFamily:"inherit",fontWeight:700}}>Recalculate</button>
+    </div>
+
+    <div style={{padding:"14px 18px",background:"#1a1a00",borderRadius:6,border:`1px solid ${AC}33`,marginBottom:20,fontSize:14,color:"#ccc",lineHeight:1.7}}>
+      🎯 <strong style={{color:AC}}>Goal: {goal}</strong> · Based on your body stats and activity level
+    </div>
+
+    {/* Main targets */}
+    <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:8,marginBottom:20}}>
+      {[
+        {label:"Daily Calories",value:`${calculated.targetCals}`,unit:"kcal",big:true},
+        {label:"Daily Protein",value:`${calculated.proteinG}`,unit:"g"},
+        {label:"Daily Carbs",value:`${calculated.carbG}`,unit:"g"},
+        {label:"Daily Fats",value:`${calculated.fatG}`,unit:"g"},
+      ].map((s,i)=>(
+        <div key={i} style={{padding:"20px",background:CA,borderRadius:6,border:`1px solid ${B2}`,borderLeft:i===0?`3px solid ${AC}`:`1px solid ${B2}`,textAlign:"center"}}>
+          <div style={{fontFamily:"Arial Black,Arial",fontSize:i===0?40:32,fontWeight:900,color:i===0?AC:"#fff",lineHeight:1}}>{s.value}</div>
+          <div style={{fontSize:12,color:AC,fontWeight:700,marginTop:4}}>{s.unit}</div>
+          <div style={{fontSize:11,color:MU,letterSpacing:"0.1em",textTransform:"uppercase",marginTop:4}}>{s.label}</div>
+        </div>
+      ))}
+    </div>
+
+    {/* TDEE info */}
+    <div style={{padding:"14px 18px",background:"#161616",borderRadius:6,border:`1px solid ${B2}`,marginBottom:20,fontSize:13,color:MU,lineHeight:1.7}}>
+      Your maintenance calories (TDEE) are <strong style={{color:"#fff"}}>{calculated.tdee} kcal</strong>. 
+      {isLose?` Eating ${calculated.targetCals} kcal puts you in a deficit of ${calculated.tdee-calculated.targetCals} kcal per day.`
+      :isBuild?` Eating ${calculated.targetCals} kcal puts you in a surplus of ${calculated.targetCals-calculated.tdee} kcal per day.`
+      :` Eating ${calculated.targetCals} kcal keeps you at maintenance.`}
+    </div>
+
+    {/* Per meal breakdown */}
+    <div style={{padding:"16px 18px",background:CA,borderRadius:6,border:`1px solid ${B2}`,marginBottom:20}}>
+      <div style={{fontSize:13,fontWeight:900,color:AC,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:12}}>Per Meal Targets ({calculated.mealCount} meals)</div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+        {[["Calories per meal",`${calculated.calsPerMeal} kcal`],["Protein per meal",`${calculated.proteinPerMeal}g`]].map(([l,v])=>(
+          <div key={l} style={{padding:"12px",background:"#161616",borderRadius:4}}>
+            <div style={{fontSize:13,color:MU,marginBottom:4}}>{l}</div>
+            <div style={{fontSize:18,fontWeight:900,color:"#fff"}}>{v}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+
+    {/* Sample meal plan */}
+    <div style={{marginBottom:20}}>
+      <div style={{fontSize:13,fontWeight:900,color:AC,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:12}}>Sample Meal Plan</div>
+      {calculated.sampleMeals.map((meal,i)=>(
+        <div key={i} style={{padding:"16px 18px",background:i%2===0?CA:"#161616",borderRadius:6,marginBottom:6,display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,flexWrap:"wrap"}}>
+          <div>
+            <div style={{fontSize:11,fontWeight:700,color:AC,letterSpacing:"0.1em",marginBottom:4}}>{meal.time.toUpperCase()}</div>
+            <div style={{fontSize:14,fontWeight:700,color:"#fff"}}>{meal.meal}</div>
+          </div>
+          <div style={{textAlign:"right",flexShrink:0}}>
+            <div style={{fontSize:13,color:AC,fontWeight:700}}>{meal.cals} kcal</div>
+            <div style={{fontSize:12,color:MU}}>{meal.protein}g protein</div>
+          </div>
+        </div>
+      ))}
+      <div style={{padding:"10px 14px",background:"#111",borderRadius:4,fontSize:12,color:"#444",marginTop:6}}>
+        Adjust portion sizes to hit your daily targets. These are examples only.
+      </div>
+    </div>
+
+    {/* Best foods */}
+    <div style={{marginBottom:20}}>
+      <div style={{fontSize:13,fontWeight:900,color:AC,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:12}}>Best Foods For Your Goal</div>
+      {[
+        {label:"Protein sources",items:calculated.proteins},
+        {label:"Carb sources",items:calculated.carbs},
+        {label:"Healthy fats",items:calculated.fats},
+        {label:"Vegetables",items:calculated.veg},
+      ].map((group,i)=>(
+        <div key={i} style={{padding:"16px 18px",background:i%2===0?CA:"#161616",borderRadius:6,marginBottom:6}}>
+          <div style={{fontSize:12,fontWeight:700,color:MU,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:10}}>{group.label}</div>
+          <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+            {group.items.map(item=>(
+              <div key={item} style={{padding:"5px 12px",background:"#1a1a1a",border:`1px solid ${B2}`,borderRadius:100,fontSize:12,color:"#ccc"}}>{item}</div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+
+    {/* Meal timing */}
+    <div style={{marginBottom:20}}>
+      <div style={{fontSize:13,fontWeight:900,color:AC,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:12}}>Meal Timing Around Training</div>
+      {[
+        {time:"Pre-workout (1-2hrs before)",desc:"Eat complex carbs and moderate protein. Low fat and fibre. Oats, rice or sweet potato with chicken or eggs."},
+        {time:"Post-workout (within 60 mins)",desc:"Fast protein and simple carbs. Whey protein and white rice or a banana. This is your most important meal."},
+        {time:"Before bed",desc:isLose?"Keep it light. Cottage cheese or Greek yogurt. High protein, low calorie.":"Slow digesting protein. Cottage cheese or casein. Supports overnight muscle recovery."},
+      ].map((item,i)=>(
+        <div key={i} style={{padding:"16px 18px",background:i%2===0?CA:"#161616",borderRadius:6,marginBottom:6,borderLeft:`3px solid ${AC}44`}}>
+          <div style={{fontSize:12,fontWeight:700,color:AC,marginBottom:6}}>{item.time.toUpperCase()}</div>
+          <div style={{fontSize:14,color:MU,lineHeight:1.65}}>{item.desc}</div>
+        </div>
+      ))}
+    </div>
+
+    {/* Supplements */}
+    <div style={{marginBottom:20}}>
+      <div style={{fontSize:13,fontWeight:900,color:AC,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:12}}>Supplement Recommendations</div>
+      {[
+        {name:"Creatine Monohydrate",dose:"3-5g daily",why:"The most proven supplement. Increases strength and muscle. Take it every day, timing does not matter."},
+        {name:"Whey Protein",dose:"As needed",why:"Only if you struggle to hit your protein target from food. Not essential — food always comes first."},
+        {name:"Vitamin D3",dose:"2000-4000 IU daily",why:"Most people in the UK are deficient. Supports testosterone, immunity and recovery."},
+        {name:"Magnesium",dose:"300-400mg before bed",why:"Improves sleep quality and muscle recovery. One of the most underrated supplements."},
+      ].map((s,i)=>(
+        <div key={i} style={{padding:"16px 18px",background:i%2===0?CA:"#161616",borderRadius:6,marginBottom:6}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:8,marginBottom:6}}>
+            <div style={{fontSize:14,fontWeight:700,color:"#fff"}}>{s.name}</div>
+            <div style={{fontSize:12,fontWeight:700,color:AC}}>{s.dose}</div>
+          </div>
+          <div style={{fontSize:13,color:MU,lineHeight:1.6}}>{s.why}</div>
+        </div>
+      ))}
+    </div>
+
+    <div style={{padding:"14px 16px",background:"#111",borderRadius:6,fontSize:12,color:"#444",lineHeight:1.7,marginBottom:8}}>
+      ⚠️ This nutrition guide is for general fitness purposes only and does not constitute medical advice. Always consult a qualified healthcare professional if you have any medical conditions or dietary requirements.
+    </div>
+  </>;
+
+  return null;
+}
+
 // ── DASHBOARD ─────────────────────────────────────────────────
 function Dashboard({session,name,plan,profile,onLogout,onNewPlan}){
   const [tab,setTab]=useState("plan");
@@ -540,7 +943,7 @@ function Dashboard({session,name,plan,profile,onLogout,onNewPlan}){
     </nav>
 
     <div style={{display:"flex",borderBottom:`1px solid ${BO}`,overflowX:"auto"}}>
-      {[["plan","💪 My Plan"],["nutrition","🥗 Nutrition"],["tracker","📈 Progress"],["profile","⚙️ Profile"]].map(([k,l])=>(
+      {[["plan","💪 My Plan"],["nutrition","🥗 Nutrition"],["tracker","📈 Progress"],["profile","⚙️ Profile"],["help","❓ Help"]].map(([k,l])=>(
         <button key={k} onClick={()=>setTab(k)} style={{padding:"13px 14px",background:"none",border:"none",fontSize:13,fontWeight:700,color:tab===k?AC:MU,borderBottom:`2px solid ${tab===k?AC:"transparent"}`,marginBottom:-1,whiteSpace:"nowrap",fontFamily:"inherit",cursor:"pointer"}}>{l}</button>
       ))}
     </div>
@@ -609,40 +1012,9 @@ function Dashboard({session,name,plan,profile,onLogout,onNewPlan}){
         </div>
       </>}
 
-      {tab==="nutrition"&&<>
-        <h2 style={{fontFamily:"Arial Black,Arial",fontSize:28,fontWeight:900,marginBottom:6}}>Your Nutrition</h2>
-        <p style={{fontSize:14,color:MU,marginBottom:24,lineHeight:1.6}}>Tailored to your goal: <strong style={{color:AC}}>{profile?.goal}</strong></p>
-        {[
-          {title:"Daily Calories",value:plan.nutrition?.calories},
-          {title:"Daily Protein",value:plan.nutrition?.protein},
-        ].map((item,i)=>(
-          <div key={i} style={{padding:"16px 18px",background:i%2===0?CA:"#161616",borderRadius:6,marginBottom:8,borderLeft:`3px solid ${AC}`,display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8}}>
-            <div style={{fontSize:15,fontWeight:700}}>{item.title}</div>
-            <div style={{fontSize:13,fontWeight:700,color:AC}}>{item.value}</div>
-          </div>
-        ))}
-        {plan.nutrition?.tips?.map((tip,i)=>(
-          <div key={i} style={{padding:"14px 18px",background:"#161616",borderRadius:6,marginBottom:8,fontSize:14,color:MU,lineHeight:1.6}}>💡 {tip}</div>
-        ))}
-      </>}
+      {tab==="nutrition"&&<NutritionGuide profile={profile} plan={plan}/>}
 
-      {tab==="tracker"&&<>
-        <h2 style={{fontFamily:"Arial Black,Arial",fontSize:28,fontWeight:900,marginBottom:6}}>Progress Tracker</h2>
-        <p style={{fontSize:14,color:MU,marginBottom:24}}>Fill this in every 4 weeks. Progress that isn't tracked isn't progress.</p>
-        {["Weight (kg)","Chest (cm)","Waist (cm)","Bench Press 1RM (kg)","Squat 1RM (kg)","Deadlift 1RM (kg)","Pull Ups (max reps)"].map((m,i)=>(
-          <div key={i} style={{padding:"14px",background:CA,borderRadius:6,marginBottom:10,border:`1px solid ${B2}`}}>
-            <div style={{fontSize:13,fontWeight:700,marginBottom:10}}>{m}</div>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8}}>
-              {["Week 1","Week 4","Week 8","Week 12"].map(w=>(
-                <div key={w}>
-                  <div style={{fontSize:10,color:MU,letterSpacing:"0.1em",marginBottom:4}}>{w.toUpperCase()}</div>
-                  <input type="number" placeholder="—" style={{width:"100%",padding:"10px 8px",background:"#161616",color:"#fff",border:`1px solid ${B2}`,borderRadius:4,fontSize:14,textAlign:"center",fontFamily:"inherit",boxSizing:"border-box"}}/>
-                </div>
-              ))}
-            </div>
-          </div>
-        ))}
-      </>}
+      {tab==="tracker"&&<Tracker session={session}/>}
 
       {tab==="profile"&&<>
         <h2 style={{fontFamily:"Arial Black,Arial",fontSize:28,fontWeight:900,marginBottom:6}}>Your Profile</h2>
@@ -662,6 +1034,97 @@ function Dashboard({session,name,plan,profile,onLogout,onNewPlan}){
         ))}
         <div style={{marginTop:20}}>
           <Btn onClick={onNewPlan} ghost>Update Answers & Regenerate Plan</Btn>
+        </div>
+      </>}
+
+      {tab==="help"&&<>
+        <h2 style={{fontFamily:"Arial Black,Arial",fontSize:28,fontWeight:900,marginBottom:6}}>Help & Support</h2>
+        <p style={{fontSize:14,color:MU,marginBottom:28,lineHeight:1.6}}>Everything you need to know about your plan.</p>
+
+        {/* Contact */}
+        <div style={{padding:"20px",background:CA,borderRadius:8,border:`1px solid ${B2}`,borderLeft:`3px solid ${AC}`,marginBottom:16}}>
+          <div style={{fontSize:13,fontWeight:900,color:AC,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:8}}>📧 Contact Us</div>
+          <div style={{fontSize:14,color:"#ccc",lineHeight:1.7,marginBottom:12}}>Got a question or issue? We aim to reply within 24 hours.</div>
+          <a href="mailto:fitnessalldaylong@protonmail.com" style={{display:"inline-block",padding:"12px 20px",background:AC,color:"#080808",borderRadius:4,fontSize:14,fontWeight:900,letterSpacing:"0.08em",textDecoration:"none",textTransform:"uppercase"}}>
+            Email Us
+          </a>
+        </div>
+
+        {/* FAQ */}
+        <div style={{marginBottom:16}}>
+          <div style={{fontSize:13,fontWeight:900,color:AC,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:12}}>❓ Frequently Asked Questions</div>
+          {[
+            {q:"How do I cancel my subscription?",a:"You can cancel anytime. Email fitnessalldaylong@protonmail.com with your account email and we'll cancel it immediately. You keep full access until the end of your current billing period. Like a gym membership — no refunds for the current period but no future charges."},
+            {q:"Can I change my plan?",a:"Yes — go to the Profile tab and click 'Update Answers & Regenerate Plan'. Your plan will be rebuilt based on your new answers straight away."},
+            {q:"What if I have no gym equipment?",a:"Select 'Bodyweight Only' in the equipment question and your plan will be built entirely around exercises that need no equipment at all."},
+            {q:"I'm a wheelchair user — will this work for me?",a:"Yes. Select 'Wheelchair User' in the physical considerations question and every exercise in your plan will be adapted for seated training."},
+            {q:"How does progressive overload work?",a:"Each week aim to add a small amount of weight or do one extra rep on each exercise. Even tiny improvements compound into big results over 12 weeks."},
+            {q:"When will I see results?",a:"Most people notice strength improvements within 2–3 weeks. Visible body changes typically start around weeks 4–6 if nutrition is on track."},
+            {q:"Can I do this plan more than once?",a:"Absolutely. Complete all 3 phases then start again with heavier weights. Progressive overload never stops working."},
+            {q:"What if I miss a session?",a:"Don't stress. Just pick up where you left off. Consistency over weeks matters far more than any single missed session."},
+          ].map((item,i)=>(
+            <FAQItem key={i} q={item.q} a={item.a}/>
+          ))}
+        </div>
+
+        {/* Cancel subscription */}
+        <div style={{padding:"20px",background:"#161616",borderRadius:8,border:`1px solid ${B2}`,marginBottom:16}}>
+          <div style={{fontSize:13,fontWeight:900,color:"#fff",letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:8}}>🚫 Cancel Subscription</div>
+          <div style={{fontSize:14,color:MU,lineHeight:1.75,marginBottom:12}}>
+            You can cancel your subscription at any time. You will keep full access until the end of your current billing period. No questions asked.
+          </div>
+          <div style={{fontSize:13,color:MU,lineHeight:1.7}}>
+            To cancel email us at{" "}
+            <a href="mailto:fitnessalldaylong@protonmail.com" style={{color:AC,textDecoration:"none"}}>fitnessalldaylong@protonmail.com</a>
+            {" "}with your account email address and we'll action it within 24 hours.
+          </div>
+        </div>
+
+        {/* Terms */}
+        <div style={{padding:"20px",background:"#161616",borderRadius:8,border:`1px solid ${B2}`,marginBottom:16}}>
+          <div style={{fontSize:13,fontWeight:900,color:"#fff",letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:12}}>📄 Terms & Conditions</div>
+          {[
+            ["Service","FADL provides personalised digital fitness programmes on a monthly subscription basis. The service is provided by Fitness All Day Long (fitnessalldaylong@protonmail.com)."],
+            ["Subscription & Billing","Your subscription is billed monthly at £14.99. Payment is processed securely by Stripe. You authorise us to charge your payment method on a recurring monthly basis until cancelled."],
+            ["Cancellation","You may cancel at any time by emailing fitnessalldaylong@protonmail.com. Cancellation takes effect at the end of the current billing period. You retain full access until then."],
+            ["No Refunds","All payments are non-refundable. Like a gym membership or streaming service, once a billing period has started no refunds are issued for that period."],
+            ["14-Day Cooling Off Waiver","Under the Consumer Contracts Regulations 2013, you normally have 14 days to cancel a digital service. By ticking the relevant box at checkout and requesting immediate access, you waive this right. The service begins immediately upon payment."],
+            ["Health & Safety Disclaimer","The workout plans are for general fitness purposes only and do not constitute medical advice. Always consult a qualified medical professional before starting any new exercise programme, particularly if you have any existing health conditions, injuries or disabilities. FADL accepts no liability for injury, illness or adverse health effects arising from following this programme."],
+            ["Intellectual Property","All content is for your personal use only. Sharing, distributing, reproducing or reselling any part of your plan is strictly prohibited."],
+            ["Limitation of Liability","FADL's liability is limited to the amount paid in the current billing period. We are not liable for indirect, consequential or special damages."],
+            ["Governing Law","These terms are governed by the laws of England and Wales. Any disputes shall be subject to the exclusive jurisdiction of the courts of England and Wales."],
+            ["Contact","fitnessalldaylong@protonmail.com · fitnessalldaylong.netlify.app"],
+          ].map(([title,text],i)=>(
+            <div key={i} style={{marginBottom:14,paddingBottom:14,borderBottom:i<9?`1px solid #222`:"none"}}>
+              <div style={{fontSize:13,fontWeight:700,color:"#fff",marginBottom:4}}>{title}</div>
+              <div style={{fontSize:13,color:MU,lineHeight:1.7}}>{text}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Privacy Policy */}
+        <div style={{padding:"20px",background:"#161616",borderRadius:8,border:`1px solid ${B2}`,marginBottom:16}}>
+          <div style={{fontSize:13,fontWeight:900,color:"#fff",letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:12}}>🔒 Privacy Policy</div>
+          {[
+            ["Who We Are","Fitness All Day Long (FADL) operates fitnessalldaylongapp.netlify.app. Contact: fitnessalldaylong@protonmail.com."],
+            ["What Data We Collect","We collect your name, email address and payment information when you sign up. We also store your workout preferences, progress tracker data and plan preferences."],
+            ["How We Use Your Data","Your data is used solely to provide and improve the FADL service — to create your account, generate your personalised plan, process payments and communicate with you about your subscription."],
+            ["Who We Share It With","We share your payment data with Stripe to process transactions securely. We share your email with Supabase for authentication. We do not sell, rent or share your personal data with any third parties for marketing purposes."],
+            ["Data Storage","Your data is stored securely using Supabase (EU region). Payment data is processed and stored by Stripe and is never stored directly by FADL."],
+            ["Your Rights (GDPR)","Under UK GDPR you have the right to: access your data, correct inaccurate data, request deletion of your data, withdraw consent at any time. To exercise any of these rights email fitnessalldaylong@protonmail.com."],
+            ["Data Retention","We retain your account data for as long as your subscription is active. If you cancel, your data is retained for 30 days then deleted upon request."],
+            ["Cookies","This app does not use tracking cookies. We use localStorage to maintain your login session only."],
+            ["Contact","For any privacy concerns email fitnessalldaylong@protonmail.com."],
+          ].map(([title,text],i)=>(
+            <div key={i} style={{marginBottom:14,paddingBottom:14,borderBottom:i<8?`1px solid #222`:"none"}}>
+              <div style={{fontSize:13,fontWeight:700,color:"#fff",marginBottom:4}}>{title}</div>
+              <div style={{fontSize:13,color:MU,lineHeight:1.7}}>{text}</div>
+            </div>
+          ))}
+        </div>
+
+        <div style={{padding:"14px",background:"#111",borderRadius:6,textAlign:"center",fontSize:12,color:"#444"}}>
+          #FADL · fitnessalldaylong@protonmail.com · fitnessalldaylong.netlify.app
         </div>
       </>}
     </div>
