@@ -1166,32 +1166,17 @@ function App(){
       try{
         const s=JSON.parse(saved);
         setSession(s);setName(s.name||"");
-
-        // Try to refresh the token first
-        const refreshToken=localStorage.getItem("fadl_refresh");
-        let activeToken=s.token;
-        if(refreshToken){
-          const refreshed=await supa.refreshSession(refreshToken);
-          if(refreshed?.access_token){
-            activeToken=refreshed.access_token;
-            if(refreshed.refresh_token)localStorage.setItem("fadl_refresh",refreshed.refresh_token);
-            const updated={...s,token:activeToken};
-            setSession(updated);
-            localStorage.setItem("fadl_session",JSON.stringify(updated));
-          }
-        }
-
         // Always verify payment from Supabase
-        supa.getPaid(s.user.id,activeToken).then(isPaid=>{
+        supa.getPaid(s.user.id,s.token).then(isPaid=>{
           if(!isPaid){
             const updated={...s,paid:false};
             localStorage.setItem("fadl_session",JSON.stringify(updated));
             setScreen("payment");
             return;
           }
-          const updated={...s,token:activeToken,paid:true};
+          const updated={...s,paid:true};
           localStorage.setItem("fadl_session",JSON.stringify(updated));
-          supa.getPlan(s.user.id,activeToken).then(existingPlan=>{
+          supa.getPlan(s.user.id,s.token).then(existingPlan=>{
             if(existingPlan){
               setPlan(existingPlan);
               const savedProfile=localStorage.getItem("fadl_profile");
