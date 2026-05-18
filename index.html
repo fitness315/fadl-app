@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>#FADL — Your Personal Plan</title>
+<title>#FADL · Your Personal Plan</title>
 <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -36,12 +36,12 @@ const AC="#F0FF00", MU="#666", CA="#111", B2="#2a2a2a", BO="#1e1e1e";
 const H=(tok)=>({"apikey":SUPA_ANON,"Authorization":`Bearer ${tok||SUPA_ANON}`,"Content-Type":"application/json"});
 const supa={
   async signUp(e,p,n){const r=await fetch(`${SUPA_URL}/auth/v1/signup`,{method:"POST",headers:H(),body:JSON.stringify({email:e,password:p,data:{name:n}})});return r.json();},
-  async signIn(e,p){const r=await fetch(`${SUPA_URL}/auth/v1/token?grant_type=password`,{method:"POST",headers:H(),body:JSON.stringify({email:e,password:p})});return r.json();},
+  async signIn(e,p){const r=await fetch(`${SUPA_URL}/auth/v1/token?grant_type=password`,{method:"POST",headers:H(),body:JSON.stringify({email:e,password:p})});const d=await r.json();if(d.refresh_token)localStorage.setItem("fadl_refresh",d.refresh_token);return d;},
   async signOut(tok){await fetch(`${SUPA_URL}/auth/v1/logout`,{method:"POST",headers:H(tok)});},
   async getUser(tok){const r=await fetch(`${SUPA_URL}/auth/v1/user`,{headers:H(tok)});return r.json();},
-  async getPaid(uid,tok){try{const r=await fetch(`${SUPA_URL}/rest/v1/purchases?user_id=eq.${uid}&select=*`,{headers:H(tok)});const d=await r.json();return Array.isArray(d)&&d.length>0;}catch{return false;}},
+  async getPaid(uid,tok){try{const r=await fetch(`${SUPA_URL}/rest/v1/purchases?user_id=eq.${uid}&select=id&limit=1`,{headers:{...H(tok),"Accept":"application/json"}});if(!r.ok)return false;const d=await r.json();return Array.isArray(d)&&d.length>0;}catch{return false;}},
   async setPaid(uid,tok){await fetch(`${SUPA_URL}/rest/v1/purchases`,{method:"POST",headers:{...H(tok),"Prefer":"return=minimal"},body:JSON.stringify({user_id:uid,product:"12_week_plan",purchased_at:new Date().toISOString()})});},
-  async savePlan(uid,tok,plan){try{await fetch(`${SUPA_URL}/rest/v1/user_plans`,{method:"POST",headers:{...H(tok),"Prefer":"resolution=merge-duplicates,return=minimal"},body:JSON.stringify({user_id:uid,plan_data:JSON.stringify(plan),created_at:new Date().toISOString()})});}catch(e){console.log("save plan err",e);}},
+  async refreshSession(refreshToken){try{const r=await fetch(`${SUPA_URL}/auth/v1/token?grant_type=refresh_token`,{method:"POST",headers:H(),body:JSON.stringify({refresh_token:refreshToken})});return r.json();}catch{return null;}},try{await fetch(`${SUPA_URL}/rest/v1/user_plans`,{method:"POST",headers:{...H(tok),"Prefer":"resolution=merge-duplicates,return=minimal"},body:JSON.stringify({user_id:uid,plan_data:JSON.stringify(plan),created_at:new Date().toISOString()})});}catch(e){console.log("save plan err",e);}},
   async getPlan(uid,tok){try{const r=await fetch(`${SUPA_URL}/rest/v1/user_plans?user_id=eq.${uid}&select=*&limit=1`,{headers:H(tok)});const d=await r.json();return Array.isArray(d)&&d.length>0?JSON.parse(d[0].plan_data):null;}catch{return null;}},
   async saveTracker(uid,tok,data){try{await fetch(`${SUPA_URL}/rest/v1/user_tracker`,{method:"POST",headers:{...H(tok),"Prefer":"resolution=merge-duplicates,return=minimal"},body:JSON.stringify({user_id:uid,tracker_data:JSON.stringify(data),updated_at:new Date().toISOString()})});}catch(e){console.log("save tracker err",e);}},
   async getTracker(uid,tok){try{const r=await fetch(`${SUPA_URL}/rest/v1/user_tracker?user_id=eq.${uid}&select=*&limit=1`,{headers:H(tok)});const d=await r.json();return Array.isArray(d)&&d.length>0?JSON.parse(d[0].tracker_data):null;}catch{return null;}},
@@ -121,7 +121,7 @@ function hasEquip(profile,eq){return profile.equipment.includes(eq);}
 function hasAny(profile,arr){return arr.some(e=>profile.equipment.includes(e));}
 function pick(profile,options){return options.find(e=>!e.needs||hasEquip(profile,e.needs))||options[options.length-1];}
 
-function getReps(ex,exp){return ex.reps[exp==="Beginner — less than 1 year"?"b":exp==="Intermediate — 1 to 3 years"?"i":"a"];}
+function getReps(ex,exp){return ex.reps[exp==="Beginner (less than 1 year)"?"b":exp==="Intermediate (1 to 3 years)"?"i":"a"];}
 
 function buildExercise(ex,profile){return {name:ex.name,reps:getReps(ex,profile.experience),rest:ex.rest,tip:ex.tip};}
 
@@ -146,7 +146,7 @@ function generatePlan(profile){
 
   // Sets per phase based on experience
   const phaseConf=[
-    {phase:"PHASE 01",title:"Foundation",weeks:"Weeks 1–4",sets:exp.includes("Beginner")?3:4,rpe:"6–7/10",desc:`Building the foundation for your ${goal.toLowerCase()} journey.${isWheelchair?" Every exercise is adapted for seated training — full upper body development is absolutely achievable.":" Master the movements before adding intensity."}`},
+    {phase:"PHASE 01",title:"Foundation",weeks:"Weeks 1–4",sets:exp.includes("Beginner")?3:4,rpe:"6–7/10",desc:`Building the foundation for your ${goal.toLowerCase()} journey.${isWheelchair?" Every exercise is adapted for seated training. Full upper body development is absolutely achievable.":" Master the movements before adding intensity."}`},
     {phase:"PHASE 02",title:"Build",weeks:"Weeks 5–8",sets:4,rpe:"7–8/10",desc:`Increasing volume to drive ${goal==="Build muscle"?"muscle growth":"fat loss and muscle retention"}. Push harder each week.`},
     {phase:"PHASE 03",title:"Peak",weeks:"Weeks 9–12",sets:exp.includes("Advanced")?5:4,rpe:"8–9/10",desc:`Maximum intensity. Push close to failure on final sets. This is where your physique truly changes.`},
   ];
@@ -173,9 +173,9 @@ function generatePlan(profile){
 
   // Standard day templates
   const dayTemplates3=[
-    {label:"DAY A",focus:"Full Body — Upper",groups:["chest","back","shoulders"]},
-    {label:"DAY B",focus:"Full Body — Lower",groups:isLimitedLower?["chest","back","core"]:["legs","calves","core"]},
-    {label:"DAY C",focus:"Full Body — Push/Pull",groups:["chest","back","biceps","triceps"]},
+    {label:"DAY A",focus:"Full Body: Upper",groups:["chest","back","shoulders"]},
+    {label:"DAY B",focus:"Full Body: Lower",groups:isLimitedLower?["chest","back","core"]:["legs","calves","core"]},
+    {label:"DAY C",focus:"Full Body: Push and Pull",groups:["chest","back","biceps","triceps"]},
   ];
   const dayTemplates4=[
     {label:"DAY A",focus:"Chest · Shoulders · Triceps",groups:["chest","shoulders","triceps"]},
@@ -220,11 +220,11 @@ function generatePlan(profile){
     calories:isLose?"TDEE minus 300–500 calories":isBuild?"TDEE plus 200–300 calories":"Eat at your TDEE (maintenance)",
     protein:`${isLose?"1.2g":"1g"} per lb of bodyweight daily`,
     tips:[
-      isLose?"Track your calories for at least 2 weeks — awareness is everything":"Eat in a small surplus. Not a big one.",
-      isBuild?"Don't skip meals — consistency builds muscle":"Protein fills you up and protects muscle.",
+      isLose?"Track your calories for at least 2 weeks. Awareness is everything.":"Eat in a small surplus. Not a big one.",
+      isBuild?"Don't skip meals. Consistency builds muscle.":"Protein fills you up and protects muscle.",
       "Drink 3–4 litres of water every day",
-      "Sleep 7–9 hours — this is non-negotiable for results",
-      isWheelchair?"Upper body training burns significant calories — don't underestimate it":"Meal prep on Sunday to make the whole week easier",
+      "Sleep 7 to 9 hours. Non-negotiable for results.",
+      isWheelchair?"Upper body training burns significant calories. Do not underestimate it.":"Meal prep on Sunday to make the whole week easier",
     ],
   };
 
@@ -289,11 +289,11 @@ function Landing({onSignup,onLogin}){
         YOUR PLAN.<br/><span style={{color:AC}}>YOUR WAY.</span>
       </h1>
       <p style={{fontSize:16,color:MU,maxWidth:480,lineHeight:1.75,marginBottom:40}}>
-        Answer 6 questions. Get a 12 week programme built specifically for your goal, your equipment and your schedule.
+        Answer 7 questions. Get a 12 week programme built specifically for your goal, your equipment and your schedule.
       </p>
       <div style={{width:"100%",maxWidth:360,display:"flex",flexDirection:"column",gap:10}}>
         <button onClick={onSignup} style={{padding:"16px 40px",background:AC,color:"#080808",fontSize:16,fontWeight:900,letterSpacing:"0.1em",textTransform:"uppercase",border:"none",borderRadius:4,cursor:"pointer",fontFamily:"inherit"}}>
-          Build My Plan — £14.99/mo
+          Build My Plan · £14.99/mo
         </button>
         <button onClick={onLogin} style={{padding:"16px 40px",background:"transparent",color:"#fff",fontSize:15,fontWeight:700,border:`1px solid ${B2}`,borderRadius:4,cursor:"pointer",fontFamily:"inherit"}}>
           Already have an account? Log in
@@ -402,7 +402,7 @@ function PaymentScreen({session,onPaid}){
         <div style={{fontSize:40,marginBottom:16}}>🎯</div>
         <h2 style={{fontFamily:"Arial Black,Arial",fontSize:36,fontWeight:900,marginBottom:8}}>Get Your Personal Plan</h2>
         <p style={{fontSize:15,color:MU,marginBottom:28,lineHeight:1.7}}>
-          Pay once a month. Answer 6 quick questions and we'll build a 12 week programme completely tailored to you.
+          Pay once a month. Answer 7 quick questions and we'll build a 12 week programme completely tailored to you.
         </p>
         <div style={{padding:"20px",background:CA,borderRadius:6,border:`1px solid ${B2}`,marginBottom:24}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,flexWrap:"wrap",gap:8}}>
@@ -412,7 +412,7 @@ function PaymentScreen({session,onPaid}){
             </div>
             <div style={{fontFamily:"Arial Black,Arial",fontSize:28,fontWeight:900,color:AC}}>£14.99</div>
           </div>
-          {["Plan built around your goal and equipment","Tailored to your experience level","Nutrition guide for your specific goal","Progress tracker","Update your plan anytime","Cancel anytime — no contracts"].map(f=>(
+          {["Plan built around your goal and equipment","Tailored to your experience level","Nutrition guide for your specific goal","Progress tracker","Update your plan anytime","Cancel anytime. No contracts."].map(f=>(
             <div key={f} style={{fontSize:13,color:MU,marginBottom:5}}>✓ {f}</div>
           ))}
         </div>
@@ -451,9 +451,9 @@ const QS=[
     {v:"Improve fitness",l:"Improve Fitness",d:"Get fitter and healthier overall"},
   ]},
   {key:"mobility",q:"Do you have any physical considerations?",emoji:"♿",type:"single",options:[
-    {v:"None",l:"No limitations",d:"Full range of movement — standard plan"},
-    {v:"Wheelchair user",l:"Wheelchair User",d:"Fully seated programme — all exercises adapted for you"},
-    {v:"Limited lower body",l:"Limited Lower Body",d:"Upper body focus — seated or standing exercises"},
+    {v:"None",l:"No limitations",d:"Full range of movement. Standard plan."},
+    {v:"Wheelchair user",l:"Wheelchair User",d:"Fully seated programme. All exercises adapted for you."},
+    {v:"Limited lower body",l:"Limited Lower Body",d:"Upper body focus. Seated or standing exercises."},
     {v:"Limited upper body",l:"Limited Upper Body",d:"Lower body and core focus"},
     {v:"Other",l:"Other",d:"Describe below and we'll build around it"},
   ]},
@@ -477,11 +477,11 @@ const QS=[
     {v:"Bodyweight only",l:"Bodyweight Only"},
   ]},
   {key:"experience",q:"What's your experience level?",emoji:"💪",type:"single",options:[
-    {v:"Beginner — less than 1 year",l:"Beginner",d:"Less than 1 year training"},
-    {v:"Intermediate — 1 to 3 years",l:"Intermediate",d:"1–3 years consistent training"},
-    {v:"Advanced — 3+ years",l:"Advanced",d:"3+ years of serious training"},
+    {v:"Beginner (less than 1 year)",l:"Beginner",d:"Less than 1 year training"},
+    {v:"Intermediate (1 to 3 years)",l:"Intermediate",d:"1–3 years consistent training"},
+    {v:"Advanced (3+ years)",l:"Advanced",d:"3+ years of serious training"},
   ]},
-  {key:"injuries",q:"Any injuries or areas to avoid?",emoji:"🩹",type:"text",placeholder:"E.g. bad knees, lower back — or type None"},
+  {key:"injuries",q:"Any injuries or areas to avoid?",emoji:"🩹",type:"text",placeholder:"E.g. bad knees, lower back. Or type None."},
 ];
 
 function Questionnaire({name,onComplete}){
@@ -903,7 +903,7 @@ function NutritionGuide({profile,plan}){
       <div style={{fontSize:13,fontWeight:900,color:AC,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:12}}>Supplement Recommendations</div>
       {[
         {name:"Creatine Monohydrate",dose:"3-5g daily",why:"The most proven supplement. Increases strength and muscle. Take it every day, timing does not matter."},
-        {name:"Whey Protein",dose:"As needed",why:"Only if you struggle to hit your protein target from food. Not essential — food always comes first."},
+        {name:"Whey Protein",dose:"As needed",why:"Only if you struggle to hit your protein target from food. Not essential. Food always comes first."},
         {name:"Vitamin D3",dose:"2000-4000 IU daily",why:"Most people in the UK are deficient. Supports testosterone, immunity and recovery."},
         {name:"Magnesium",dose:"300-400mg before bed",why:"Improves sleep quality and muscle recovery. One of the most underrated supplements."},
       ].map((s,i)=>(
@@ -1054,10 +1054,10 @@ function Dashboard({session,name,plan,profile,onLogout,onNewPlan}){
         <div style={{marginBottom:16}}>
           <div style={{fontSize:13,fontWeight:900,color:AC,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:12}}>❓ Frequently Asked Questions</div>
           {[
-            {q:"How do I cancel my subscription?",a:"You can cancel anytime. Email fitnessalldaylong@protonmail.com with your account email and we'll cancel it immediately. You keep full access until the end of your current billing period. Like a gym membership — no refunds for the current period but no future charges."},
-            {q:"Can I change my plan?",a:"Yes — go to the Profile tab and click 'Update Answers & Regenerate Plan'. Your plan will be rebuilt based on your new answers straight away."},
+            {q:"How do I cancel my subscription?",a:"You can cancel anytime. Email fitnessalldaylong@protonmail.com with your account email and we'll cancel it immediately. You keep full access until the end of your current billing period. Like a gym membership. No refunds for the current period but no future charges."},
+            {q:"Can I change my plan?",a:"Yes. Go to the Profile tab and click 'Update Answers & Regenerate Plan'. Your plan will be rebuilt based on your new answers straight away."},
             {q:"What if I have no gym equipment?",a:"Select 'Bodyweight Only' in the equipment question and your plan will be built entirely around exercises that need no equipment at all."},
-            {q:"I'm a wheelchair user — will this work for me?",a:"Yes. Select 'Wheelchair User' in the physical considerations question and every exercise in your plan will be adapted for seated training."},
+            {q:"I use a wheelchair. Will this work for me?",a:"Yes. Select 'Wheelchair User' in the physical considerations question and every exercise in your plan will be adapted for seated training."},
             {q:"How does progressive overload work?",a:"Each week aim to add a small amount of weight or do one extra rep on each exercise. Even tiny improvements compound into big results over 12 weeks."},
             {q:"When will I see results?",a:"Most people notice strength improvements within 2–3 weeks. Visible body changes typically start around weeks 4–6 if nutrition is on track."},
             {q:"Can I do this plan more than once?",a:"Absolutely. Complete all 3 phases then start again with heavier weights. Progressive overload never stops working."},
@@ -1108,7 +1108,7 @@ function Dashboard({session,name,plan,profile,onLogout,onNewPlan}){
           {[
             ["Who We Are","Fitness All Day Long (FADL) operates fadl-app.fitnessalldaylong.workers.dev. Contact: fitnessalldaylong@protonmail.com."],
             ["What Data We Collect","We collect your name, email address and payment information when you sign up. We also store your workout preferences, progress tracker data and plan preferences."],
-            ["How We Use Your Data","Your data is used solely to provide and improve the FADL service — to create your account, generate your personalised plan, process payments and communicate with you about your subscription."],
+            ["How We Use Your Data","Your data is used solely to provide and improve the FADL service. This includes creating your account, generate your personalised plan, process payments and communicate with you about your subscription."],
             ["Who We Share It With","We share your payment data with Stripe to process transactions securely. We share your email with Supabase for authentication. We do not sell, rent or share your personal data with any third parties for marketing purposes."],
             ["Data Storage","Your data is stored securely using Supabase (EU region). Payment data is processed and stored by Stripe and is never stored directly by FADL."],
             ["Your Rights (GDPR)","Under UK GDPR you have the right to: access your data, correct inaccurate data, request deletion of your data, withdraw consent at any time. To exercise any of these rights email fitnessalldaylong@protonmail.com."],
@@ -1165,19 +1165,32 @@ function App(){
       try{
         const s=JSON.parse(saved);
         setSession(s);setName(s.name||"");
-        // Always verify payment from Supabase — never trust localStorage cache
-        supa.getPaid(s.user.id,s.token).then(isPaid=>{
+
+        // Try to refresh the token first
+        const refreshToken=localStorage.getItem("fadl_refresh");
+        let activeToken=s.token;
+        if(refreshToken){
+          const refreshed=await supa.refreshSession(refreshToken);
+          if(refreshed?.access_token){
+            activeToken=refreshed.access_token;
+            if(refreshed.refresh_token)localStorage.setItem("fadl_refresh",refreshed.refresh_token);
+            const updated={...s,token:activeToken};
+            setSession(updated);
+            localStorage.setItem("fadl_session",JSON.stringify(updated));
+          }
+        }
+
+        // Always verify payment from Supabase
+        supa.getPaid(s.user.id,activeToken).then(isPaid=>{
           if(!isPaid){
-            // Not paid — update cache and show payment screen
             const updated={...s,paid:false};
             localStorage.setItem("fadl_session",JSON.stringify(updated));
             setScreen("payment");
             return;
           }
-          // Paid — update cache and check for existing plan
-          const updated={...s,paid:true};
+          const updated={...s,token:activeToken,paid:true};
           localStorage.setItem("fadl_session",JSON.stringify(updated));
-          supa.getPlan(s.user.id,s.token).then(existingPlan=>{
+          supa.getPlan(s.user.id,activeToken).then(existingPlan=>{
             if(existingPlan){
               setPlan(existingPlan);
               const savedProfile=localStorage.getItem("fadl_profile");
@@ -1232,6 +1245,7 @@ function App(){
   const handleLogout=async()=>{
     if(session?.token)await supa.signOut(session.token);
     localStorage.removeItem("fadl_session");
+    localStorage.removeItem("fadl_refresh");
     localStorage.removeItem("fadl_profile");
     setSession(null);setPlan(null);setProfile(null);setScreen("landing");
   };
