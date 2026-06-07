@@ -29,7 +29,7 @@ const { useState, useEffect } = React;
 // ── CONFIG ────────────────────────────────────────────────────
 const SUPA_URL  = "https://nrtovlmelrwvezwhkdoh.supabase.co";
 const SUPA_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5ydG92bG1lbHJ3dmV6d2hrZG9oIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgzNDU5NzEsImV4cCI6MjA5MzkyMTk3MX0.NpqNxYAdNZbI0L4EhluXnyAmUjlP5YECUZaK-2MQGvQ";
-const STRIPE    = "https://buy.stripe.com/test_28E8wP4659Ud7ydbhQ4F201";
+const STRIPE    = "https://buy.stripe.com/28E8wP4659Ud7ydbhQ4F201";
 const AC="#F0FF00", MU="#666", CA="#111", B2="#2a2a2a", BO="#1e1e1e";
 
 // ── SUPABASE ──────────────────────────────────────────────────
@@ -39,12 +39,20 @@ const supa={
   async signIn(e,p){const r=await fetch(`${SUPA_URL}/auth/v1/token?grant_type=password`,{method:"POST",headers:H(),body:JSON.stringify({email:e,password:p})});const d=await r.json();if(d.refresh_token)localStorage.setItem("fadl_refresh",d.refresh_token);return d;},
   async signOut(tok){await fetch(`${SUPA_URL}/auth/v1/logout`,{method:"POST",headers:H(tok)});},
   async getUser(tok){const r=await fetch(`${SUPA_URL}/auth/v1/user`,{headers:H(tok)});return r.json();},
-  async getPaid(uid,tok){try{const r=await fetch(`${SUPA_URL}/rest/v1/purchases?user_id=eq.${uid}&select=id&limit=1`,{headers:{...H(tok),"Accept":"application/json"}});if(!r.ok)return false;const d=await r.json();return Array.isArray(d)&&d.length>0;}catch{return false;}},
+  async getPaid(uid,tok){
+    try{
+      const r=await fetch(`${SUPA_URL}/rest/v1/purchases?user_id=eq.${uid}&select=id&limit=1`,{headers:{...H(tok),"Accept":"application/json"}});
+      if(r.status===401||r.status===403){return null;} // null = token expired, not unpaid
+      if(!r.ok)return false;
+      const d=await r.json();
+      return Array.isArray(d)&&d.length>0;
+    }catch{return null;}
+  },
   async setPaid(uid,tok){await fetch(`${SUPA_URL}/rest/v1/purchases`,{method:"POST",headers:{...H(tok),"Prefer":"return=minimal"},body:JSON.stringify({user_id:uid,product:"12_week_plan",purchased_at:new Date().toISOString()})});},
   async refreshSession(refreshToken){try{const r=await fetch(`${SUPA_URL}/auth/v1/token?grant_type=refresh_token`,{method:"POST",headers:H(),body:JSON.stringify({refresh_token:refreshToken})});return r.json();}catch{return null;}},
   async savePlan(uid,tok,plan){try{await fetch(`${SUPA_URL}/rest/v1/user_plans`,{method:"POST",headers:{...H(tok),"Prefer":"resolution=merge-duplicates,return=minimal"},body:JSON.stringify({user_id:uid,plan_data:JSON.stringify(plan),created_at:new Date().toISOString()})});}catch(e){console.log("save plan err",e);}},
   async getPlan(uid,tok){try{const r=await fetch(`${SUPA_URL}/rest/v1/user_plans?user_id=eq.${uid}&select=*&limit=1`,{headers:H(tok)});const d=await r.json();return Array.isArray(d)&&d.length>0?JSON.parse(d[0].plan_data):null;}catch{return null;}},
-  async saveTracker(uid,tok,data){try{await fetch(`${SUPA_URL}/rest/v1/user_tracker`,{method:"POST",headers:{...H(tok),"Prefer":"resolution=merge-duplicates,return=minimal"},body:JSON.stringify({user_id:uid,tracker_data:JSON.stringify(data),updated_at:new Date().toISOString()})});}catch(e){console.log("save tracker err",e);}},
+  async saveTracker(uid,tok,data){try{await fetch(`${SUPA_URL}/rest/v1/user_tracker`,{method:"POST",headers:{...H(tok),"Prefer":"resolution=merge-duplicates,return=minimal"},body:JSON.stringify({user_id:uid,tracker_data:JSON.stringify(data),updated_at:new Date().toISOString()})});await fetch(`${SUPA_URL}/rest/v1/user_tracker?user_id=eq.${uid}`,{method:"PATCH",headers:{...H(tok),"Prefer":"return=minimal"},body:JSON.stringify({tracker_data:JSON.stringify(data),updated_at:new Date().toISOString()})});}catch(e){console.log("save tracker err",e);}},
   async getTracker(uid,tok){try{const r=await fetch(`${SUPA_URL}/rest/v1/user_tracker?user_id=eq.${uid}&select=*&limit=1`,{headers:H(tok)});const d=await r.json();return Array.isArray(d)&&d.length>0?JSON.parse(d[0].tracker_data):null;}catch{return null;}},
 };
 
@@ -147,54 +155,78 @@ function generatePlan(profile){
 
   // Sets per phase based on experience
   const phaseConf=[
-    {phase:"PHASE 01",title:"Foundation",weeks:"Weeks 1–4",sets:exp.includes("Beginner")?3:4,rpe:"6–7/10",desc:`Building the foundation for your ${goal.toLowerCase()} journey.${isWheelchair?" Every exercise is adapted for seated training. Full upper body development is absolutely achievable.":" Master the movements before adding intensity."}`},
+    {phase:"PHASE 01",title:"Foundation",weeks:"Weeks 1–4",sets:exp.includes("Beginner")?3:4,rpe:"6–7/10",desc:`Building the foundation for your ${goal.toLowerCase()} journey.${isWheelchair?" Every exercise is adapted for seated training. Full upper body development is absolutely achievable.":days<=2?" With limited days every session counts. Focus on perfect form and effort.":" Master the movements before adding intensity."}`},
     {phase:"PHASE 02",title:"Build",weeks:"Weeks 5–8",sets:4,rpe:"7–8/10",desc:`Increasing volume to drive ${goal==="Build muscle"?"muscle growth":"fat loss and muscle retention"}. Push harder each week.`},
     {phase:"PHASE 03",title:"Peak",weeks:"Weeks 9–12",sets:exp.includes("Advanced")?5:4,rpe:"8–9/10",desc:`Maximum intensity. Push close to failure on final sets. This is where your physique truly changes.`},
   ];
 
   // Wheelchair specific day templates — upper body only, all seated
   const wheelchairTemplates3=[
-    {label:"DAY A",focus:"Chest · Shoulders · Triceps",groups:["chest","shoulders","triceps"],wheelchair:true},
-    {label:"DAY B",focus:"Back · Biceps",groups:["back","biceps"],wheelchair:true},
-    {label:"DAY C",focus:"Full Upper Body · Core",groups:["chest","back","shoulders","core"],wheelchair:true},
+    {label:"DAY 1",focus:"Chest · Shoulders · Triceps",groups:["chest","shoulders","triceps"],wheelchair:true},
+    {label:"DAY 2",focus:"Back · Biceps",groups:["back","biceps"],wheelchair:true},
+    {label:"DAY 3",focus:"Full Upper Body · Core",groups:["chest","back","shoulders","core"],wheelchair:true},
   ];
   const wheelchairTemplates4=[
-    {label:"DAY A",focus:"Chest · Triceps",groups:["chest","triceps"],wheelchair:true},
-    {label:"DAY B",focus:"Back · Biceps",groups:["back","biceps"],wheelchair:true},
-    {label:"DAY C",focus:"Shoulders · Core",groups:["shoulders","core"],wheelchair:true},
-    {label:"DAY D",focus:"Full Upper Body",groups:["chest","back","shoulders"],wheelchair:true},
+    {label:"DAY 1",focus:"Chest · Triceps",groups:["chest","triceps"],wheelchair:true},
+    {label:"DAY 2",focus:"Back · Biceps",groups:["back","biceps"],wheelchair:true},
+    {label:"DAY 3",focus:"Shoulders · Core",groups:["shoulders","core"],wheelchair:true},
+    {label:"DAY 4",focus:"Full Upper Body",groups:["chest","back","shoulders"],wheelchair:true},
   ];
   const wheelchairTemplates5=[
-    {label:"DAY A",focus:"Chest · Triceps",groups:["chest","triceps"],wheelchair:true},
-    {label:"DAY B",focus:"Back · Biceps",groups:["back","biceps"],wheelchair:true},
-    {label:"DAY C",focus:"Shoulders",groups:["shoulders"],wheelchair:true},
-    {label:"DAY D",focus:"Full Upper Push",groups:["chest","shoulders","triceps"],wheelchair:true},
-    {label:"DAY E",focus:"Full Upper Pull · Core",groups:["back","biceps","core"],wheelchair:true},
+    {label:"DAY 1",focus:"Chest · Triceps",groups:["chest","triceps"],wheelchair:true},
+    {label:"DAY 2",focus:"Back · Biceps",groups:["back","biceps"],wheelchair:true},
+    {label:"DAY 3",focus:"Shoulders",groups:["shoulders"],wheelchair:true},
+    {label:"DAY 4",focus:"Full Upper Push",groups:["chest","shoulders","triceps"],wheelchair:true},
+    {label:"DAY 5",focus:"Full Upper Pull · Core",groups:["back","biceps","core"],wheelchair:true},
   ];
 
   // Standard day templates
+  const dayTemplates1=[
+    {label:"DAY 1",focus:"Full Body",groups:["chest","back","shoulders","legs"]},
+  ];
+  const dayTemplates2=[
+    {label:"DAY 1",focus:"Upper Body",groups:["chest","back","shoulders","biceps","triceps"]},
+    {label:"DAY 2",focus:"Lower Body",groups:["legs","calves","core"]},
+  ];
   const dayTemplates3=[
-    {label:"DAY A",focus:"Full Body: Upper",groups:["chest","back","shoulders"]},
-    {label:"DAY B",focus:"Full Body: Lower",groups:isLimitedLower?["chest","back","core"]:["legs","calves","core"]},
-    {label:"DAY C",focus:"Full Body: Push and Pull",groups:["chest","back","biceps","triceps"]},
+    {label:"DAY 1",focus:"Full Body: Upper",groups:["chest","back","shoulders"]},
+    {label:"DAY 2",focus:"Full Body: Lower",groups:isLimitedLower?["chest","back","core"]:["legs","calves","core"]},
+    {label:"DAY 3",focus:"Full Body: Push and Pull",groups:["chest","back","biceps","triceps"]},
   ];
   const dayTemplates4=[
-    {label:"DAY A",focus:"Chest · Shoulders · Triceps",groups:["chest","shoulders","triceps"]},
-    {label:"DAY B",focus:"Back · Biceps",groups:["back","biceps"]},
-    {label:"DAY C",focus:isLimitedLower?"Arms · Core":"Legs · Calves · Core",groups:isLimitedLower?["biceps","triceps","core"]:["legs","calves","core"]},
-    {label:"DAY D",focus:"Full Body · Weak Points",groups:["chest","back","shoulders"]},
+    {label:"DAY 1",focus:"Chest · Shoulders · Triceps",groups:["chest","shoulders","triceps"]},
+    {label:"DAY 2",focus:"Back · Biceps",groups:["back","biceps"]},
+    {label:"DAY 3",focus:isLimitedLower?"Arms · Core":"Legs · Calves · Core",groups:isLimitedLower?["biceps","triceps","core"]:["legs","calves","core"]},
+    {label:"DAY 4",focus:"Full Body · Weak Points",groups:["chest","back","shoulders"]},
   ];
   const dayTemplates5=[
-    {label:"DAY A",focus:"Chest · Triceps",groups:["chest","triceps"]},
-    {label:"DAY B",focus:"Back · Biceps",groups:["back","biceps"]},
-    {label:"DAY C",focus:isLimitedLower?"Shoulders · Core":"Legs · Calves",groups:isLimitedLower?["shoulders","core"]:["legs","calves"]},
-    {label:"DAY D",focus:"Shoulders · Core",groups:["shoulders","core"]},
-    {label:"DAY E",focus:"Full Body",groups:["chest","back","legs"]},
+    {label:"DAY 1",focus:"Chest · Triceps",groups:["chest","triceps"]},
+    {label:"DAY 2",focus:"Back · Biceps",groups:["back","biceps"]},
+    {label:"DAY 3",focus:isLimitedLower?"Shoulders · Core":"Legs · Calves",groups:isLimitedLower?["shoulders","core"]:["legs","calves"]},
+    {label:"DAY 4",focus:"Shoulders · Core",groups:["shoulders","core"]},
+    {label:"DAY 5",focus:"Full Body",groups:["chest","back","legs"]},
+  ];
+  const dayTemplates6=[
+    {label:"DAY 1",focus:"Chest · Triceps",groups:["chest","triceps"]},
+    {label:"DAY 2",focus:"Back · Biceps",groups:["back","biceps"]},
+    {label:"DAY 3",focus:"Legs · Calves",groups:isLimitedLower?["shoulders","core"]:["legs","calves"]},
+    {label:"DAY 4",focus:"Shoulders · Core",groups:["shoulders","core"]},
+    {label:"DAY 5",focus:"Chest · Back",groups:["chest","back"]},
+    {label:"DAY 6",focus:"Arms · Core",groups:["biceps","triceps","core"]},
+  ];
+  const dayTemplates7=[
+    {label:"DAY 1",focus:"Chest · Triceps",groups:["chest","triceps"]},
+    {label:"DAY 2",focus:"Back · Biceps",groups:["back","biceps"]},
+    {label:"DAY 3",focus:"Legs · Calves",groups:isLimitedLower?["shoulders","core"]:["legs","calves"]},
+    {label:"DAY 4",focus:"Shoulders",groups:["shoulders"]},
+    {label:"DAY 5",focus:"Chest · Back",groups:["chest","back"]},
+    {label:"DAY 6",focus:"Arms · Core",groups:["biceps","triceps","core"]},
+    {label:"DAY 7",focus:"Active Recovery · Full Body",groups:["legs","shoulders","core"]},
   ];
 
   const templates=isWheelchair
     ?(days===3?wheelchairTemplates3:days===5?wheelchairTemplates5:wheelchairTemplates4)
-    :(days===3?dayTemplates3:days===5?dayTemplates5:dayTemplates4);
+    :(days===1?dayTemplates1:days===2?dayTemplates2:days===3?dayTemplates3:days===5?dayTemplates5:days===6?dayTemplates6:days===7?dayTemplates7:dayTemplates4);
 
   const buildDays=()=>templates.map(tmpl=>{
     const exercises=[];
@@ -294,7 +326,7 @@ function Landing({onSignup,onLogin}){
       </p>
       <div style={{width:"100%",maxWidth:360,display:"flex",flexDirection:"column",gap:10}}>
         <button onClick={onSignup} style={{padding:"16px 40px",background:AC,color:"#080808",fontSize:16,fontWeight:900,letterSpacing:"0.1em",textTransform:"uppercase",border:"none",borderRadius:4,cursor:"pointer",fontFamily:"inherit"}}>
-          Build My Plan · £14.99/mo
+          Build My Plan · £9.99/mo
         </button>
         <button onClick={onLogin} style={{padding:"16px 40px",background:"transparent",color:"#fff",fontSize:15,fontWeight:700,border:`1px solid ${B2}`,borderRadius:4,cursor:"pointer",fontFamily:"inherit"}}>
           Already have an account? Log in
@@ -307,7 +339,7 @@ function Landing({onSignup,onLogin}){
       </div>
     </div>
     <div style={{background:AC,padding:"16px 24px",textAlign:"center"}}>
-      <span style={{fontFamily:"Arial Black,Arial",fontSize:14,fontWeight:900,color:"#080808",letterSpacing:"0.06em"}}>£14.99/MONTH · PERSONALISED · CANCEL ANYTIME</span>
+      <span style={{fontFamily:"Arial Black,Arial",fontSize:14,fontWeight:900,color:"#080808",letterSpacing:"0.06em"}}>£9.99/MONTH · PERSONALISED · CANCEL ANYTIME</span>
     </div>
   </div>;
 }
@@ -409,9 +441,9 @@ function PaymentScreen({session,onPaid}){
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,flexWrap:"wrap",gap:8}}>
             <div>
               <div style={{fontSize:15,fontWeight:700}}>Personalised 12 Week Plan</div>
-              <div style={{fontSize:12,color:MU,marginTop:2}}>£14.99/month · Cancel anytime</div>
+              <div style={{fontSize:12,color:MU,marginTop:2}}>£9.99/month · Cancel anytime</div>
             </div>
-            <div style={{fontFamily:"Arial Black,Arial",fontSize:28,fontWeight:900,color:AC}}>£14.99</div>
+            <div style={{fontFamily:"Arial Black,Arial",fontSize:28,fontWeight:900,color:AC}}>£9.99</div>
           </div>
           {["Plan built around your goal and equipment","Tailored to your experience level","Nutrition guide for your specific goal","Progress tracker","Update your plan anytime","Cancel anytime. No contracts."].map(f=>(
             <div key={f} style={{fontSize:13,color:MU,marginBottom:5}}>✓ {f}</div>
@@ -431,7 +463,7 @@ function PaymentScreen({session,onPaid}){
         </div>
         <button onClick={()=>window.location.href=STRIPE}
           style={{width:"100%",padding:"16px",background:AC,color:"#080808",fontSize:16,fontWeight:900,letterSpacing:"0.1em",textTransform:"uppercase",border:"none",borderRadius:4,cursor:"pointer",fontFamily:"inherit"}}>
-          Pay £14.99 & Build My Plan →
+          Pay £9.99 & Build My Plan →
         </button>
         <div style={{display:"flex",justifyContent:"center",gap:20,marginTop:16,flexWrap:"wrap"}}>
           {["🔒 SSL Encrypted","✓ Powered by Stripe","✓ Cancel anytime"].map(t=>(
@@ -459,9 +491,13 @@ const QS=[
     {v:"Other",l:"Other",d:"Describe below and we'll build around it"},
   ]},
   {key:"days",q:"How many days can you train per week?",emoji:"📅",type:"single",options:[
+    {v:"1",l:"1 Day",d:"Just getting started or very limited time"},
+    {v:"2",l:"2 Days",d:"Busy schedule but committed"},
     {v:"3",l:"3 Days",d:"Perfect for beginners or busy schedules"},
     {v:"4",l:"4 Days",d:"The sweet spot for most people"},
     {v:"5",l:"5 Days",d:"For those ready to commit fully"},
+    {v:"6",l:"6 Days",d:"High commitment training"},
+    {v:"7",l:"7 Days",d:"Every day including active recovery"},
   ]},
   {key:"location",q:"Where do you train?",emoji:"📍",type:"single",options:[
     {v:"Commercial gym",l:"Gym",d:"Full equipment available"},
@@ -563,19 +599,31 @@ function Tracker({session}){
   const [saving,setSaving]=useState(false);
 
   useEffect(()=>{
+    // Load from localStorage first for instant display
+    const local=localStorage.getItem("fadl_tracker");
+    if(local){try{setData(JSON.parse(local));}catch{}}
+    // Then try Supabase for the saved version
     supa.getTracker(session.user.id,session.token).then(d=>{
-      if(d)setData(d);
+      if(d){
+        setData(d);
+        localStorage.setItem("fadl_tracker",JSON.stringify(d));
+      }
       setLoading(false);
     }).catch(()=>setLoading(false));
   },[]);
 
   const update=(metric,week,val)=>{
     setSaved(false);
-    setData(d=>({...d,[metric]:{...(d[metric]||{}),[week]:val}}));
+    setData(d=>{
+      const updated={...d,[metric]:{...(d[metric]||{}),[week]:val}};
+      localStorage.setItem("fadl_tracker",JSON.stringify(updated));
+      return updated;
+    });
   };
 
   const save=async()=>{
     setSaving(true);
+    localStorage.setItem("fadl_tracker",JSON.stringify(data));
     await supa.saveTracker(session.user.id,session.token,data);
     setSaving(false);setSaved(true);
     setTimeout(()=>setSaved(false),3000);
@@ -783,7 +831,7 @@ function NutritionGuide({profile,plan}){
     <div style={{marginBottom:24}}>
       <label style={{fontSize:11,fontWeight:700,color:MU,letterSpacing:"0.15em",textTransform:"uppercase",display:"block",marginBottom:10}}>How many meals per day?</label>
       <div style={{display:"flex",gap:8}}>
-        {["2","3","4","5","6"].map(o=>(
+        {["1","2","3","4","5"].map(o=>(
           <button key={o} onClick={()=>setMeals(o)} style={{flex:1,padding:"13px 4px",borderRadius:4,background:meals===o?AC:CA,color:meals===o?"#080808":MU,border:`1px solid ${meals===o?AC:B2}`,fontSize:15,fontWeight:900,fontFamily:"inherit",cursor:"pointer"}}>
             {o}
           </button>
@@ -1086,7 +1134,7 @@ function Dashboard({session,name,plan,profile,onLogout,onNewPlan}){
           <div style={{fontSize:13,fontWeight:900,color:"#fff",letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:12}}>📄 Terms & Conditions</div>
           {[
             ["Service","FADL provides personalised digital fitness programmes on a monthly subscription basis. The service is provided by Fitness All Day Long (fitnessalldaylong@protonmail.com)."],
-            ["Subscription & Billing","Your subscription is billed monthly at £14.99. Payment is processed securely by Stripe. You authorise us to charge your payment method on a recurring monthly basis until cancelled."],
+            ["Subscription & Billing","Your subscription is billed monthly at £9.99. Payment is processed securely by Stripe. You authorise us to charge your payment method on a recurring monthly basis until cancelled."],
             ["Cancellation","You may cancel at any time by emailing fitnessalldaylong@protonmail.com. Cancellation takes effect at the end of the current billing period. You retain full access until then."],
             ["No Refunds","All payments are non-refundable. Like a gym membership or streaming service, once a billing period has started no refunds are issued for that period."],
             ["14-Day Cooling Off Waiver","Under the Consumer Contracts Regulations 2013, you normally have 14 days to cancel a digital service. By ticking the relevant box at checkout and requesting immediate access, you waive this right. The service begins immediately upon payment."],
@@ -1166,16 +1214,10 @@ function App(){
       try{
         const s=JSON.parse(saved);
         setSession(s);setName(s.name||"");
-        // Always verify payment from Supabase
-        supa.getPaid(s.user.id,s.token).then(isPaid=>{
-          if(!isPaid){
-            const updated={...s,paid:false};
-            localStorage.setItem("fadl_session",JSON.stringify(updated));
-            setScreen("payment");
-            return;
-          }
-          const updated={...s,paid:true};
-          localStorage.setItem("fadl_session",JSON.stringify(updated));
+
+        // If localStorage says paid, trust it and go straight to dashboard
+        // then verify in background — don't make user pay again on token expiry
+        if(s.paid===true){
           supa.getPlan(s.user.id,s.token).then(existingPlan=>{
             if(existingPlan){
               setPlan(existingPlan);
@@ -1185,25 +1227,66 @@ function App(){
             }else{
               setScreen("questionnaire");
             }
+          }).catch(()=>{
+            // Can't load plan — token expired, send to login for fresh token
+            localStorage.removeItem("fadl_session");
+            setScreen("login");
           });
-        }).catch(()=>setScreen("payment"));
+          return;
+        }
+
+        // Not marked as paid in localStorage — check Supabase
+        supa.getPaid(s.user.id,s.token).then(isPaid=>{
+          if(isPaid===null){
+            // Token expired — send to login
+            localStorage.removeItem("fadl_session");
+            setSession(null);
+            setScreen("login");
+            return;
+          }
+          if(isPaid){
+            const updated={...s,paid:true};
+            localStorage.setItem("fadl_session",JSON.stringify(updated));
+            supa.getPlan(s.user.id,s.token).then(existingPlan=>{
+              if(existingPlan){
+                setPlan(existingPlan);
+                const savedProfile=localStorage.getItem("fadl_profile");
+                if(savedProfile)setProfile(JSON.parse(savedProfile));
+                setScreen("dashboard");
+              }else{
+                setScreen("questionnaire");
+              }
+            });
+          }else{
+            setScreen("payment");
+          }
+        }).catch(()=>{
+          localStorage.removeItem("fadl_session");
+          setScreen("login");
+        });
       }catch{localStorage.removeItem("fadl_session");}
     }
   },[]);
 
   const handleAuth=(s)=>{
     setSession(s);setName(s.name||"");
-    localStorage.setItem("fadl_session",JSON.stringify({...s,paid:false}));
-    // Always check Supabase for payment status
     supa.getPaid(s.user.id,s.token).then(isPaid=>{
-      if(!isPaid){setScreen("payment");return;}
-      const updated={...s,paid:true};
-      localStorage.setItem("fadl_session",JSON.stringify(updated));
-      supa.getPlan(s.user.id,s.token).then(existing=>{
-        if(existing){setPlan(existing);const sp=localStorage.getItem("fadl_profile");if(sp)setProfile(JSON.parse(sp));setScreen("dashboard");}
-        else setScreen("questionnaire");
-      });
-    }).catch(()=>setScreen("payment"));
+      if(isPaid===true){
+        const updated={...s,paid:true};
+        localStorage.setItem("fadl_session",JSON.stringify(updated));
+        setSession(updated);
+        supa.getPlan(s.user.id,s.token).then(existing=>{
+          if(existing){setPlan(existing);const sp=localStorage.getItem("fadl_profile");if(sp)setProfile(JSON.parse(sp));setScreen("dashboard");}
+          else setScreen("questionnaire");
+        });
+      }else{
+        localStorage.setItem("fadl_session",JSON.stringify({...s,paid:false}));
+        setScreen("payment");
+      }
+    }).catch(()=>{
+      localStorage.setItem("fadl_session",JSON.stringify({...s,paid:false}));
+      setScreen("payment");
+    });
   };
 
   const handlePaid=()=>{
