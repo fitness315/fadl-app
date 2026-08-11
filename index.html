@@ -34,9 +34,9 @@
 <link rel="apple-touch-startup-image" href="/icons/splash-828x1792.png" media="(device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)"/>
 <link rel="apple-touch-startup-image" href="/icons/splash-750x1334.png" media="(device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)"/>
 <link rel="apple-touch-startup-image" href="/icons/splash-640x1136.png" media="(device-width: 320px) and (device-height: 568px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)"/>
-<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" integrity="sha384-DGyLxAyjq0f9SPpVevD6IgztCFlnMF6oW/XQGmfe+IsZ8TqEiDrcHkMLKI6fiB/Z" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" integrity="sha384-gTGxhz21lVGYNMcdJOyq01Edg0jhn/c22nsx0kyqP0TxaV5WVdsSH1fSDUf5YJj1" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@8.0.4/babel.min.js" integrity="sha384-bdF7m0Y1IFKt9Q6xC8X9qkXn0OBriQWKyWwZKYsN05zF6P/g9OakjjL0G2Sd4pB4" crossorigin="anonymous"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:#080808;color:#fff;font-family:'Helvetica Neue',Arial,sans-serif;min-height:100vh}
@@ -78,7 +78,10 @@ const supa={
       return Array.isArray(d)&&d.length>0;
     }catch{return null;}
   },
-  async setPaid(uid,tok){await fetch(`${SUPA_URL}/rest/v1/purchases`,{method:"POST",headers:{...H(tok),"Prefer":"return=minimal"},body:JSON.stringify({user_id:uid,product:"12_week_plan",purchased_at:new Date().toISOString()})});},
+  // Note: there is intentionally no client-side "setPaid" — marking a
+  // purchase paid must only ever happen server-side, from a verified
+  // Stripe webhook (see worker.js). A client-callable write here would
+  // let anyone grant themselves free access.
   async refreshSession(refreshToken){try{const r=await fetch(`${SUPA_URL}/auth/v1/token?grant_type=refresh_token`,{method:"POST",headers:H(),body:JSON.stringify({refresh_token:refreshToken})});return r.json();}catch{return null;}},
   async savePlan(uid,tok,plan){try{await fetch(`${SUPA_URL}/rest/v1/user_plans`,{method:"POST",headers:{...H(tok),"Prefer":"resolution=merge-duplicates,return=minimal"},body:JSON.stringify({user_id:uid,plan_data:JSON.stringify(plan),created_at:new Date().toISOString()})});}catch(e){console.log("save plan err",e);}},
   async getPlan(uid,tok){try{const r=await fetch(`${SUPA_URL}/rest/v1/user_plans?user_id=eq.${uid}&select=*&limit=1`,{headers:H(tok)});const d=await r.json();return Array.isArray(d)&&d.length>0?JSON.parse(d[0].plan_data):null;}catch{return null;}},
@@ -480,15 +483,42 @@ function AuthForm({mode,onSuccess,onSwitch,onBack}){
 
 // ── PAYMENT ───────────────────────────────────────────────────
 function PaymentScreen({session,onPaid}){
+  const [agreedTerms,setAgreedTerms]=useState(false);
+  const [agreedCooling,setAgreedCooling]=useState(false);
+  const [verifying,setVerifying]=useState(false);
+  const [verifyFailed,setVerifyFailed]=useState(false);
+  const canPay=agreedTerms&&agreedCooling;
+  const stripeUrl=`${STRIPE}?client_reference_id=${encodeURIComponent(session.user.id)}&prefilled_email=${encodeURIComponent(session.user.email)}`;
+
+  // After returning from Stripe we do NOT trust the redirect itself — a
+  // "?payment=success" URL is not proof of payment, anyone could type it in.
+  // Instead we poll our own server (which only gets updated by a verified
+  // Stripe webhook, see worker.js) until the purchase actually shows up.
+  const confirmPayment=async()=>{
+    setVerifying(true);setVerifyFailed(false);
+    for(let i=0;i<10;i++){
+      const isPaid=await supa.getPaid(session.user.id,session.token);
+      if(isPaid){onPaid();return;}
+      await new Promise(r=>setTimeout(r,1500));
+    }
+    setVerifying(false);setVerifyFailed(true);
+  };
+
   useEffect(()=>{
     const p=new URLSearchParams(window.location.search);
     if(p.get("payment")==="success"){
-      supa.setPaid(session.user.id,session.token).then(()=>{
-        window.history.replaceState({},"",window.location.pathname);
-        onPaid();
-      });
+      window.history.replaceState({},"",window.location.pathname);
+      confirmPayment();
     }
   },[]);
+
+  if(verifying){
+    return <div style={{minHeight:"100vh",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:24,textAlign:"center",gap:16}}>
+      <div className="spin" style={{fontSize:34}}>⏳</div>
+      <div style={{fontSize:17,fontWeight:700}}>Confirming your payment...</div>
+      <div style={{fontSize:13,color:MU,maxWidth:320,lineHeight:1.6}}>This usually takes a few seconds. Please don't close this page.</div>
+    </div>;
+  }
 
   return <div style={{minHeight:"100vh",display:"flex",flexDirection:"column"}}>
     <nav style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"18px 24px",borderBottom:`1px solid ${BO}`}}>
@@ -506,6 +536,9 @@ function PaymentScreen({session,onPaid}){
         <p style={{fontSize:15,color:MU,marginBottom:28,lineHeight:1.7}}>
           Pay once a month. Answer 7 quick questions and we'll build a 12 week programme completely tailored to you.
         </p>
+        {verifyFailed&&<div style={{padding:"14px 16px",background:"#1a1a00",borderRadius:6,border:`1px solid ${AC}33`,marginBottom:20,fontSize:13,color:"#ccc",lineHeight:1.6}}>
+          ⚠️ We couldn't confirm your payment yet. If you completed checkout, this can take a minute to process — try the button below again shortly, or email fitnessalldaylong@protonmail.com if it doesn't resolve.
+        </div>}
         <div style={{padding:"20px",background:CA,borderRadius:6,border:`1px solid ${B2}`,marginBottom:24}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,flexWrap:"wrap",gap:8}}>
             <div>
@@ -519,21 +552,22 @@ function PaymentScreen({session,onPaid}){
           ))}
         </div>
         <div style={{display:"flex",gap:10,alignItems:"flex-start",marginBottom:8,padding:"14px",background:"#161616",borderRadius:6,border:`1px solid ${B2}`}}>
-          <input type="checkbox" id="terms" style={{marginTop:3,accentColor:AC,width:16,height:16,flexShrink:0}}/>
+          <input type="checkbox" id="terms" checked={agreedTerms} onChange={e=>setAgreedTerms(e.target.checked)} style={{marginTop:3,accentColor:AC,width:16,height:16,flexShrink:0}}/>
           <label htmlFor="terms" style={{fontSize:13,color:MU,lineHeight:1.6,cursor:"pointer"}}>
             I agree to the <strong style={{color:"#fff"}}>Terms & Conditions</strong>. I understand this is a monthly subscription and all payments are non-refundable. I can cancel anytime by emailing fitnessalldaylong@protonmail.com.
           </label>
         </div>
         <div style={{display:"flex",gap:10,alignItems:"flex-start",marginBottom:16,padding:"14px",background:"#161616",borderRadius:6,border:`1px solid ${B2}`}}>
-          <input type="checkbox" id="cooling" style={{marginTop:3,accentColor:AC,width:16,height:16,flexShrink:0}}/>
+          <input type="checkbox" id="cooling" checked={agreedCooling} onChange={e=>setAgreedCooling(e.target.checked)} style={{marginTop:3,accentColor:AC,width:16,height:16,flexShrink:0}}/>
           <label htmlFor="cooling" style={{fontSize:13,color:MU,lineHeight:1.6,cursor:"pointer"}}>
             I request immediate access to the digital content and <strong style={{color:"#fff"}}>acknowledge that I waive my 14-day cooling off right</strong> under the Consumer Contracts Regulations 2013, as the service will begin immediately upon payment.
           </label>
         </div>
-        <button onClick={()=>window.location.href=STRIPE}
-          style={{width:"100%",padding:"16px",background:AC,color:"#080808",fontSize:16,fontWeight:900,letterSpacing:"0.1em",textTransform:"uppercase",border:"none",borderRadius:4,cursor:"pointer",fontFamily:"inherit"}}>
+        <button onClick={()=>canPay&&(window.location.href=stripeUrl)} disabled={!canPay}
+          style={{width:"100%",padding:"16px",background:canPay?AC:B2,color:canPay?"#080808":MU,fontSize:16,fontWeight:900,letterSpacing:"0.1em",textTransform:"uppercase",border:"none",borderRadius:4,cursor:canPay?"pointer":"not-allowed",fontFamily:"inherit"}}>
           Pay £9.99 & Build My Plan →
         </button>
+        {!canPay&&<div style={{fontSize:12,color:MU,marginTop:10,textAlign:"center"}}>Please agree to both boxes above to continue.</div>}
         <div style={{display:"flex",justifyContent:"center",gap:20,marginTop:16,flexWrap:"wrap"}}>
           {["🔒 SSL Encrypted","✓ Powered by Stripe","✓ Cancel anytime"].map(t=>(
             <div key={t} style={{fontSize:11,color:MU}}>{t}</div>
@@ -1342,17 +1376,14 @@ function App(){
     // Check for payment success first
     const params=new URLSearchParams(window.location.search);
     if(params.get("payment")==="success"){
+      // Don't trust the redirect itself — mount PaymentScreen, which polls
+      // the server for a webhook-verified purchase before granting access.
       const saved=localStorage.getItem("fadl_session");
       if(saved){
         try{
           const s=JSON.parse(saved);
-          supa.setPaid(s.user.id,s.token).then(()=>{
-            const updated={...s,paid:true};
-            localStorage.setItem("fadl_session",JSON.stringify(updated));
-            setSession(updated);setName(updated.name||"");
-            window.history.replaceState({},"",window.location.pathname);
-            setScreen("questionnaire");
-          });
+          setSession(s);setName(s.name||"");
+          setScreen("payment");
         }catch{}
       }
       return;
@@ -1364,27 +1395,10 @@ function App(){
         const s=JSON.parse(saved);
         setSession(s);setName(s.name||"");
 
-        // If localStorage says paid, trust it and go straight to dashboard
-        // then verify in background — don't make user pay again on token expiry
-        if(s.paid===true){
-          supa.getPlan(s.user.id,s.token).then(existingPlan=>{
-            if(existingPlan){
-              setPlan(existingPlan);
-              const savedProfile=localStorage.getItem("fadl_profile");
-              if(savedProfile)setProfile(JSON.parse(savedProfile));
-              setScreen("dashboard");
-            }else{
-              setScreen("questionnaire");
-            }
-          }).catch(()=>{
-            // Can't load plan — token expired, send to login for fresh token
-            localStorage.removeItem("fadl_session");
-            setScreen("login");
-          });
-          return;
-        }
-
-        // Not marked as paid in localStorage — check Supabase
+        // Always re-verify payment status against the server. A locally
+        // cached "paid" flag can be edited by the user (devtools/localStorage)
+        // so it is only ever used to pre-fill the session object, never to
+        // grant access on its own.
         supa.getPaid(s.user.id,s.token).then(isPaid=>{
           if(isPaid===null){
             // Token expired — send to login

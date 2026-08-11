@@ -1,4 +1,4 @@
-const CACHE_NAME = "fadl-cache-v1";
+const CACHE_NAME = "fadl-cache-v2";
 
 const APP_SHELL = [
   "/",
@@ -11,9 +11,9 @@ const APP_SHELL = [
   "/icons/icon-76.png",
   "/icons/icon-192.png",
   "/icons/icon-512.png",
-  "https://unpkg.com/react@18/umd/react.production.min.js",
-  "https://unpkg.com/react-dom@18/umd/react-dom.production.min.js",
-  "https://unpkg.com/@babel/standalone/babel.min.js"
+  "https://unpkg.com/react@18.3.1/umd/react.production.min.js",
+  "https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js",
+  "https://unpkg.com/@babel/standalone@8.0.4/babel.min.js"
 ];
 
 self.addEventListener("install", (event) => {
