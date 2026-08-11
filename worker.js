@@ -20,9 +20,27 @@ export default {
     }
 
     // Everything else is the static app/PWA files.
-    return env.ASSETS.fetch(request);
+    const response = await env.ASSETS.fetch(request);
+    return withSecurityHeaders(response);
   },
 };
+
+// No CSP here on purpose: this app runs Babel standalone in the browser to
+// transpile JSX at runtime, which requires 'unsafe-eval' to do anything —
+// a CSP without that would break the app, and one with it provides little
+// real XSS protection anyway. These headers are all safe, no-tradeoff wins.
+function withSecurityHeaders(response) {
+  const headers = new Headers(response.headers);
+  headers.set("X-Frame-Options", "DENY"); // clickjacking protection
+  headers.set("X-Content-Type-Options", "nosniff"); // stop MIME-sniffing
+  headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+  headers.set("Permissions-Policy", "geolocation=(), camera=(), microphone=()");
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
 
 async function handleStripeWebhook(request, env) {
   const signatureHeader = request.headers.get("Stripe-Signature");
