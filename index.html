@@ -368,8 +368,47 @@ function Landing({onSignup,onLogin}){
         ))}
       </div>
     </div>
+    <div style={{padding:"48px 24px",background:CA,borderTop:`1px solid ${BO}`,borderBottom:`1px solid ${BO}`}}>
+      <div style={{maxWidth:900,margin:"0 auto"}}>
+        <div style={{textAlign:"center",marginBottom:32}}>
+          <div style={{fontSize:11,fontWeight:700,color:AC,letterSpacing:"0.25em",marginBottom:10}}>NOT JUST WORKOUTS</div>
+          <h2 style={{fontFamily:"Arial Black,Arial",fontSize:"clamp(26px,5vw,38px)",fontWeight:900}}>Everything you need. Nothing you don't.</h2>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:16,marginBottom:40}}>
+          {[
+            {icon:"💪",title:"Workouts",desc:"A 12 week, 3 phase programme built around your goal, equipment and schedule."},
+            {icon:"🥗",title:"Nutrition",desc:"Personalised calorie and macro targets. No fad diets, no upselling."},
+            {icon:"🧠",title:"Mindset",desc:"Practical tools to stay consistent when motivation runs out."},
+            {icon:"♿",title:"Inclusive",desc:"Wheelchair and mobility adapted programmes built in from day one."},
+          ].map(f=>(
+            <div key={f.title} style={{padding:20,background:"#080808",borderRadius:8,border:`1px solid ${B2}`}}>
+              <div style={{fontSize:26,marginBottom:10}}>{f.icon}</div>
+              <div style={{fontFamily:"Arial Black,Arial",fontSize:16,fontWeight:900,marginBottom:6}}>{f.title}</div>
+              <div style={{fontSize:13,color:MU,lineHeight:1.6}}>{f.desc}</div>
+            </div>
+          ))}
+        </div>
+        <div style={{display:"flex",flexWrap:"wrap",gap:12,justifyContent:"center"}}>
+          {[["Honest","Straight talk. No jargon, no upselling."],["For Everyone","Beginner to advanced. Fully wheelchair adapted."],["Consistent","Perfect doesn't exist. Consistent does."]].map(([t,d])=>(
+            <div key={t} style={{flex:"1 1 220px",maxWidth:280,padding:"16px 18px",background:"#080808",borderRadius:8,border:`1px solid ${B2}`,borderLeft:`3px solid ${AC}`}}>
+              <div style={{fontSize:13,fontWeight:900,color:AC,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:6}}>{t}</div>
+              <div style={{fontSize:13,color:MU,lineHeight:1.6}}>{d}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+
     <div style={{background:AC,padding:"16px 24px",textAlign:"center"}}>
       <span style={{fontFamily:"Arial Black,Arial",fontSize:14,fontWeight:900,color:"#080808",letterSpacing:"0.06em"}}>£9.99/MONTH · PERSONALISED · CANCEL ANYTIME</span>
+    </div>
+
+    <div style={{padding:"24px",textAlign:"center",background:"#080808"}}>
+      <div style={{fontSize:12,color:MU,marginBottom:12}}>Follow the journey</div>
+      <div style={{display:"flex",gap:12,justifyContent:"center",flexWrap:"wrap"}}>
+        <a href="https://instagram.com/fitnessalldaylong_" target="_blank" rel="noopener noreferrer" style={{color:"#fff",fontSize:13,fontWeight:700,textDecoration:"none",border:`1px solid ${B2}`,padding:"9px 18px",borderRadius:100}}>📷 Instagram</a>
+        <a href="https://tiktok.com/@fitnessalldaylong" target="_blank" rel="noopener noreferrer" style={{color:"#fff",fontSize:13,fontWeight:700,textDecoration:"none",border:`1px solid ${B2}`,padding:"9px 18px",borderRadius:100}}>🎵 TikTok</a>
+      </div>
     </div>
   </div>;
 }
@@ -475,7 +514,7 @@ function PaymentScreen({session,onPaid}){
             </div>
             <div style={{fontFamily:"Arial Black,Arial",fontSize:28,fontWeight:900,color:AC}}>£9.99</div>
           </div>
-          {["Plan built around your goal and equipment","Tailored to your experience level","Nutrition guide for your specific goal","Progress tracker","Update your plan anytime","Cancel anytime. No contracts."].map(f=>(
+          {["Plan built around your goal and equipment","Tailored to your experience level","Nutrition guide for your specific goal","Mindset & consistency guide","Progress tracker","Update your plan anytime","Cancel anytime. No contracts."].map(f=>(
             <div key={f} style={{fontSize:13,color:MU,marginBottom:5}}>✓ {f}</div>
           ))}
         </div>
@@ -1004,6 +1043,80 @@ function NutritionGuide({profile,plan}){
   return null;
 }
 
+// ── MINDSET ───────────────────────────────────────────────────
+function MindsetGuide(){
+  const principles=[
+    {icon:"🎯",title:"Consistency beats perfection",desc:"Perfect doesn't exist. Consistent does. A mediocre session you actually did beats a perfect one you skipped."},
+    {icon:"🔁",title:"Stack the habit, not the motivation",desc:"Motivation fades. Attach training to something you already do daily — after coffee, after work, before dinner — so it stops being a decision."},
+    {icon:"📉",title:"Expect the dip",desc:"Weeks 3–5 are where most people quit. Progress slows and it stops feeling new. This is normal, not a sign it isn't working."},
+    {icon:"🧱",title:"Lower the bar on bad days",desc:"Can't face the full session? Do 10 minutes. Showing up beats a full workout you never start. Momentum matters more than intensity."},
+    {icon:"📵",title:"Ignore comparison",desc:"Your only competition is the version of you from 12 weeks ago. Other people's timelines, bodies and routines are irrelevant to yours."},
+  ];
+
+  const restartScript=[
+    "Missing one session never breaks a plan — quitting after it does.",
+    "Don't try to 'make up' missed sessions. Just resume the next one as scheduled.",
+    "Ask what got in the way, fix that one thing, and move on. No guilt spirals.",
+    "Re-read your original reason for starting before you decide to stop.",
+  ];
+
+  const checkIn=[
+    "Did I train the days I planned to this week?",
+    "Am I recovering — sleep, food, stress — or just grinding?",
+    "What nearly stopped me this week, and what will I do differently?",
+    "What's one thing that went right, even if small?",
+  ];
+
+  return <>
+    <h2 style={{fontFamily:"Arial Black,Arial",fontSize:28,fontWeight:900,marginBottom:6}}>Mindset</h2>
+    <p style={{fontSize:14,color:MU,marginBottom:24,lineHeight:1.6}}>The training and nutrition only work if you stick with them. This is how.</p>
+
+    <div style={{padding:"20px",background:"#1a1a00",borderRadius:6,border:`1px solid ${AC}33`,marginBottom:24,fontSize:14,color:"#ccc",lineHeight:1.7}}>
+      🧠 <strong style={{color:AC}}>Note:</strong> This is general motivational guidance, not therapy or clinical mental health support. If you're struggling, please speak to a qualified professional, your GP, or a service like the <a href="https://www.samaritans.org" target="_blank" rel="noopener noreferrer" style={{color:AC}}>Samaritans</a>.
+    </div>
+
+    <div style={{marginBottom:24}}>
+      <div style={{fontSize:13,fontWeight:900,color:AC,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:12}}>The 5 Principles</div>
+      {principles.map((p,i)=>(
+        <div key={i} style={{padding:"16px 18px",background:CA,borderRadius:8,border:`1px solid ${B2}`,marginBottom:10}}>
+          <div style={{display:"flex",alignItems:"flex-start",gap:12}}>
+            <div style={{fontSize:22}}>{p.icon}</div>
+            <div>
+              <div style={{fontSize:15,fontWeight:700,marginBottom:4}}>{p.title}</div>
+              <div style={{fontSize:13,color:MU,lineHeight:1.65}}>{p.desc}</div>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+
+    <div style={{padding:"20px",background:"#161616",borderRadius:8,border:`1px solid ${B2}`,marginBottom:16}}>
+      <div style={{fontSize:13,fontWeight:900,color:"#fff",letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:12}}>😤 When You Feel Like Quitting</div>
+      {restartScript.map((line,i)=>(
+        <div key={i} style={{display:"flex",gap:10,marginBottom:i<restartScript.length-1?10:0,fontSize:13,color:MU,lineHeight:1.6}}>
+          <span style={{color:AC,fontWeight:900,flexShrink:0}}>{i+1}.</span>
+          <span>{line}</span>
+        </div>
+      ))}
+    </div>
+
+    <div style={{padding:"20px",background:"#161616",borderRadius:8,border:`1px solid ${B2}`,marginBottom:16}}>
+      <div style={{fontSize:13,fontWeight:900,color:"#fff",letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:12}}>📆 Weekly Check-In</div>
+      <div style={{fontSize:13,color:MU,lineHeight:1.7,marginBottom:12}}>Ask yourself these once a week, ideally the same day every time:</div>
+      {checkIn.map((q,i)=>(
+        <div key={i} style={{display:"flex",gap:10,marginBottom:i<checkIn.length-1?10:0,fontSize:13,color:"#ccc",lineHeight:1.6}}>
+          <span style={{color:AC}}>•</span>
+          <span>{q}</span>
+        </div>
+      ))}
+    </div>
+
+    <div style={{padding:"14px 16px",background:"#111",borderRadius:6,fontSize:12,color:"#444",lineHeight:1.7}}>
+      🧠 This mindset guide offers general motivational strategies only and is not a substitute for professional mental health advice or treatment.
+    </div>
+  </>;
+}
+
 // ── DASHBOARD ─────────────────────────────────────────────────
 function Dashboard({session,name,plan,profile,onLogout,onNewPlan}){
   const [tab,setTab]=useState("plan");
@@ -1022,7 +1135,7 @@ function Dashboard({session,name,plan,profile,onLogout,onNewPlan}){
     </nav>
 
     <div style={{display:"flex",borderBottom:`1px solid ${BO}`,overflowX:"auto"}}>
-      {[["plan","💪 My Plan"],["nutrition","🥗 Nutrition"],["tracker","📈 Progress"],["profile","⚙️ Profile"],["help","❓ Help"]].map(([k,l])=>(
+      {[["plan","💪 My Plan"],["nutrition","🥗 Nutrition"],["mindset","🧠 Mindset"],["tracker","📈 Progress"],["profile","⚙️ Profile"],["help","❓ Help"]].map(([k,l])=>(
         <button key={k} onClick={()=>setTab(k)} style={{padding:"13px 14px",background:"none",border:"none",fontSize:13,fontWeight:700,color:tab===k?AC:MU,borderBottom:`2px solid ${tab===k?AC:"transparent"}`,marginBottom:-1,whiteSpace:"nowrap",fontFamily:"inherit",cursor:"pointer"}}>{l}</button>
       ))}
     </div>
@@ -1093,6 +1206,8 @@ function Dashboard({session,name,plan,profile,onLogout,onNewPlan}){
 
       {tab==="nutrition"&&<NutritionGuide profile={profile} plan={plan}/>}
 
+      {tab==="mindset"&&<MindsetGuide/>}
+
       {tab==="tracker"&&<Tracker session={session}/>}
 
       {tab==="profile"&&<>
@@ -1124,9 +1239,13 @@ function Dashboard({session,name,plan,profile,onLogout,onNewPlan}){
         <div style={{padding:"20px",background:CA,borderRadius:8,border:`1px solid ${B2}`,borderLeft:`3px solid ${AC}`,marginBottom:16}}>
           <div style={{fontSize:13,fontWeight:900,color:AC,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:8}}>📧 Contact Us</div>
           <div style={{fontSize:14,color:"#ccc",lineHeight:1.7,marginBottom:12}}>Got a question or issue? We aim to reply within 24 hours.</div>
-          <a href="mailto:fitnessalldaylong@protonmail.com" style={{display:"inline-block",padding:"12px 20px",background:AC,color:"#080808",borderRadius:4,fontSize:14,fontWeight:900,letterSpacing:"0.08em",textDecoration:"none",textTransform:"uppercase"}}>
+          <a href="mailto:fitnessalldaylong@protonmail.com" style={{display:"inline-block",padding:"12px 20px",background:AC,color:"#080808",borderRadius:4,fontSize:14,fontWeight:900,letterSpacing:"0.08em",textDecoration:"none",textTransform:"uppercase",marginBottom:14}}>
             Email Us
           </a>
+          <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+            <a href="https://instagram.com/fitnessalldaylong_" target="_blank" rel="noopener noreferrer" style={{color:"#ccc",fontSize:13,fontWeight:700,textDecoration:"none",border:`1px solid ${B2}`,padding:"8px 16px",borderRadius:100}}>📷 Instagram</a>
+            <a href="https://tiktok.com/@fitnessalldaylong" target="_blank" rel="noopener noreferrer" style={{color:"#ccc",fontSize:13,fontWeight:700,textDecoration:"none",border:`1px solid ${B2}`,padding:"8px 16px",borderRadius:100}}>🎵 TikTok</a>
+          </div>
         </div>
 
         {/* FAQ */}
