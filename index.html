@@ -306,6 +306,7 @@ function generatePlan(profile){
     phases:phaseConf.map(ph=>({...ph,days:buildDays()})),
     nutrition,
     isWheelchair,
+    generatedAt:new Date().toISOString(),
   };
 }
 
@@ -1151,6 +1152,66 @@ function MindsetGuide(){
   </>;
 }
 
+// ── REVIEW PROMPT ─────────────────────────────────────────────
+// Asks active users for a real review after they've had their plan a
+// few weeks. Sends via mailto (same zero-backend pattern as the website
+// forms) — no fabricated testimonials, only genuine ones from real users.
+function ReviewPrompt({plan,name}){
+  const [dismissed,setDismissed]=useState(()=>localStorage.getItem("fadl_review_dismissed")==="true");
+  const [open,setOpen]=useState(false);
+  const [rating,setRating]=useState(0);
+  const [text,setText]=useState("");
+  const [sent,setSent]=useState(false);
+
+  if(dismissed||sent)return null;
+  if(!plan?.generatedAt)return null;
+  const daysActive=(Date.now()-new Date(plan.generatedAt).getTime())/(1000*60*60*24);
+  if(daysActive<28)return null;
+
+  const dismissForever=()=>{
+    localStorage.setItem("fadl_review_dismissed","true");
+    setDismissed(true);
+  };
+
+  const submit=()=>{
+    const stars="★".repeat(rating)+"☆".repeat(5-rating);
+    const subject=encodeURIComponent("My FADL Review");
+    const body=encodeURIComponent(`Rating: ${stars} (${rating}/5)\n\n${text}\n\n— ${name||"A FADL member"}`);
+    window.location.href=`mailto:fitnessalldaylong@protonmail.com?subject=${subject}&body=${body}`;
+    localStorage.setItem("fadl_review_dismissed","true");
+    setSent(true);
+  };
+
+  if(!open){
+    return <div style={{padding:"16px 18px",background:"#1a1a00",borderRadius:6,border:`1px solid ${AC}33`,marginBottom:20,display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:12}}>
+      <div>
+        <div style={{fontSize:14,fontWeight:700,color:"#fff",marginBottom:2}}>⭐ How's it going, {name?.split(" ")[0]||"there"}?</div>
+        <div style={{fontSize:13,color:MU}}>You've been on your plan a few weeks now — mind leaving a quick review?</div>
+      </div>
+      <div style={{display:"flex",gap:8}}>
+        <button onClick={()=>setOpen(true)} style={{padding:"9px 16px",background:AC,color:"#080808",border:"none",borderRadius:4,fontSize:13,fontWeight:900,cursor:"pointer",fontFamily:"inherit"}}>Leave a Review</button>
+        <button onClick={dismissForever} style={{padding:"9px 16px",background:"none",color:MU,border:`1px solid ${B2}`,borderRadius:4,fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Not now</button>
+      </div>
+    </div>;
+  }
+
+  return <div style={{padding:"20px",background:CA,borderRadius:8,border:`1px solid ${B2}`,marginBottom:20}}>
+    <div style={{fontSize:15,fontWeight:700,marginBottom:12}}>Leave a review</div>
+    <div style={{display:"flex",gap:6,marginBottom:14}}>
+      {[1,2,3,4,5].map(n=>(
+        <button key={n} onClick={()=>setRating(n)} style={{background:"none",border:"none",fontSize:28,cursor:"pointer",color:n<=rating?AC:"#333",padding:0,lineHeight:1}}>★</button>
+      ))}
+    </div>
+    <textarea value={text} onChange={e=>setText(e.target.value)} placeholder="What's been good? What could be better?" rows={3}
+      style={{width:"100%",padding:"12px 14px",background:"#161616",color:"#fff",border:`1px solid ${B2}`,borderRadius:4,fontSize:14,fontFamily:"inherit",resize:"none",boxSizing:"border-box",marginBottom:12}}/>
+    <div style={{display:"flex",gap:8}}>
+      <button onClick={submit} disabled={!rating} style={{flex:1,padding:"12px",background:rating?AC:B2,color:rating?"#080808":MU,border:"none",borderRadius:4,fontSize:13,fontWeight:900,cursor:rating?"pointer":"not-allowed",fontFamily:"inherit"}}>Send Review</button>
+      <button onClick={()=>setOpen(false)} style={{padding:"12px 16px",background:"none",color:MU,border:`1px solid ${B2}`,borderRadius:4,fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Cancel</button>
+    </div>
+    <div style={{fontSize:11,color:"#444",marginTop:10,lineHeight:1.6}}>This opens your email app to send it directly to us. We may ask permission to share great reviews (first name only) on our website and socials.</div>
+  </div>;
+}
+
 // ── DASHBOARD ─────────────────────────────────────────────────
 function Dashboard({session,name,plan,profile,onLogout,onNewPlan}){
   const [tab,setTab]=useState("plan");
@@ -1183,6 +1244,8 @@ function Dashboard({session,name,plan,profile,onLogout,onNewPlan}){
         {plan.isWheelchair&&<div style={{padding:"14px 18px",background:"#001a1a",borderRadius:6,border:"1px solid #00d4ff44",marginBottom:20,fontSize:14,color:"#ccc",lineHeight:1.7}}>
           ♿ <strong style={{color:"#00d4ff"}}>Adapted plan:</strong> All exercises in this plan are designed for seated training. Every muscle group can be trained effectively from a wheelchair.
         </div>}
+
+        <ReviewPrompt plan={plan} name={name}/>
 
         <div style={{marginBottom:20}}>
           <div style={{fontSize:11,fontWeight:700,color:MU,letterSpacing:"0.15em",textTransform:"uppercase",marginBottom:10}}>Phase</div>
